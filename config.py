@@ -36,7 +36,7 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 # RAG Settings
 # ============================================
 TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "8"))
-TEMPERATURE   = float(os.getenv("TEMPERATURE", "0.3"))
+TEMPERATURE   = float(os.getenv("TEMPERATURE", "0.1"))
 MAX_TOKENS    = int(os.getenv("MAX_TOKENS",    "2048"))
 
 # ============================================

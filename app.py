@@ -51,15 +51,33 @@ def xu_ly_dang_xuat_va_luu_sheets(mssv, list_questions):
     """Tính toán dữ liệu và đẩy lên Google Sheets khi học sinh đăng xuất."""
     if not list_questions:
         total_q = 0
-        most_common_q = "Không đặt câu hỏi nào"
+        final_q_str = "Không đặt câu hỏi nào"
     else:
         total_q = len(list_questions)
-        # Sử dụng Counter để tìm câu hỏi xuất hiện nhiều nhất (hoặc trùng lặp nhất)
-        occurence_count = Counter(list_questions)
-        most_common_q = occurence_count.most_common(1)[0][0]
-        # Nếu câu hỏi quá dài, cắt bớt để hiển thị đẹp trên Sheet
-        if len(most_common_q) > 150:
-            most_common_q = most_common_q[:147] + "..."
+        
+        # 1. Chuẩn hóa (chữ thường, xóa khoảng trắng thừa) để đếm cho chính xác
+        normalized_questions = [q.strip().lower() for q in list_questions]
+        occurence_count = Counter(normalized_questions)
+        
+        # Lấy câu xuất hiện nhiều nhất và số lần của nó
+        most_common_item, so_lan = occurence_count.most_common(1)[0]
+        
+        # 2. Xử lý logic như bạn đề xuất
+        if so_lan == 1:
+            # Nếu chỉ hỏi 1 lần -> Lấy câu dài nhất từ danh sách gốc (giữ nguyên Hoa/Thường)
+            most_common_q = max(list_questions, key=len)
+            ghi_chu = "không có câu hỏi trùng lặp"
+        else:
+            # Nếu có trùng lặp -> Tìm lại câu gốc tương ứng để giữ nguyên định dạng
+            most_common_q = next(q for q in list_questions if q.strip().lower() == most_common_item)
+            ghi_chu = f"hỏi {so_lan} lần"
+
+        # 3. Cắt bớt nếu câu hỏi quá dài (Trừ hao không gian cho phần ghi chú)
+        if len(most_common_q) > 130:
+            most_common_q = most_common_q[:127] + "..."
+
+        # Nối kết quả cuối cùng
+        final_q_str = f"{most_common_q} ({ghi_chu})"
 
     thoi_gian = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -69,7 +87,7 @@ def xu_ly_dang_xuat_va_luu_sheets(mssv, list_questions):
         
         # Thêm một dòng mới vào cuối bảng LichSuDangXuat
         # Cột: Mã SV | Thời Gian Đăng Xuất | Tổng Số Câu Hỏi | Câu Hỏi Được Hỏi Nhiều Nhất
-        wks.append_row([mssv, thoi_gian, total_q, most_common_q])
+        wks.append_row([mssv, thoi_gian, total_q, final_q_str])
         return True
     except Exception as e:
         print(f"Lỗi ghi dữ liệu đăng xuất lên Sheets: {e}")
@@ -108,14 +126,14 @@ if not st.session_state.authenticated_mssv:
     st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>🤖 DSA Assistant - Xác Thực Sinh Viên</h2>", unsafe_allow_html=True)
     
     with st.form("login_form"):
-        input_mssv = st.text_input("Nhập Mã Số Sinh Viên (MSSV):", placeholder="Ví dụ: B20DCCN123").strip().upper()
+        input_mssv = st.text_input("Nhập Mã Số Sinh Viên (MSSV):", placeholder="Ví dụ: SV123").strip().upper()
         submit_btn = st.form_submit_button("Đăng Nhập Vào Hệ Thống")
         
         if submit_btn:
             if not input_mssv:
                 st.warning("⚠️ Vui lòng không để trống Mã số sinh viên!")
             else:
-                with st.spinner("🔄 Đang kiểm tra danh sách tài khoản từ Google Sheets..."):
+                with st.spinner("🔄 Đang kiểm tra danh sách tài khoản..."):
                     try:
                         sh = get_google_sheet()
                         wks = sh.worksheet(TAB_DANH_SACH)
@@ -147,7 +165,7 @@ current_user = st.session_state.authenticated_mssv
 st.sidebar.markdown(f"👤 **Sinh viên:** `{current_user}`")
 
 if st.sidebar.button("🚪 Đăng xuất & Nộp báo cáo"):
-    with st.spinner("🔄 Đang đồng bộ lịch sử buổi học lên Google Sheets của Giáo viên..."):
+    with st.spinner("🔄 Đang đồng bộ lịch sử buổi học Giáo viên..."):
         # Gọi hàm đồng bộ dữ liệu
         thanh_cong = xu_ly_dang_xuat_va_luu_sheets(current_user, st.session_state.session_questions)
         if thanh_cong:

@@ -38,12 +38,24 @@ class RAGChain:
             except Exception as e:
                 print(f"  [!] Khởi tạo Groq thất bại: {e}")
 
+        # LỚP BẢO VỆ 1: Cấu trúc lại lệnh hệ thống nghiêm ngặt, bắt buộc từ chối mọi chủ đề ngoài DSA
         self.system_instruction = (
-            "BẠN LÀ TRỢ LÝ GIẢNG DẠY DSA THÔNG MINH. QUY TẮC BẮT BUỘC:\n\n"
-            "1. XỬ LÝ CHÀO HỎI: Nếu người dùng CHỈ chào hỏi, hãy đáp lại thân mật, ngắn gọn.\n"
-            "2. XỬ LÝ CODE: Nếu học sinh gửi code: phân tích lỗi sai -> Sửa code trong ``` -> Giải thích lý thuyết.\n"
-            "3. XỬ LÝ LÝ THUYẾT: Sử dụng ngữ cảnh giáo trình được cung cấp để trả lời.\n"
-            "4. ĐỊNH DẠNG: Mỗi đoạn mã phải nằm trong khối ```. Trả lời hoàn toàn bằng Tiếng Việt."
+            "BẠN LÀ TRỢ LÝ GIẢNG DẠY CHUYÊN BIỆT CHỈ TRẢ LỜI VỀ MÔN HỌC CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT (DSA).\n"
+            "⚠️ QUY TẮC TỐI CAO VÀ BẮT BUỘC:\n\n"
+            "1. PHẠM VI KIẾN THỨC: Bạn chỉ được phép trả lời câu hỏi liên quan trực tiếp đến môn DSA "
+            "(Ví dụ: mảng, danh sách liên kết, ngăn xếp, hàng đợi, cây nhị phân, đồ thị, thuật toán sắp xếp, "
+            "tìm kiếm, độ phức tạp thuật toán Big O, pointer, đệ quy, hoặc sửa code thuật toán DSA).\n"
+            "2. CHẶN TUYỆT ĐỐI LẠC ĐỀ: Nếu câu hỏi thuộc bất kỳ chủ đề nào khác nằm ngoài chuyên mục DSA "
+            "(Ví dụ: phần mềm Microsoft Word, Excel, kiến thức xã hội/đời sống như 'cây cao nhất thế giới', "
+            "lập trình Web, toán lý hóa, hoặc trò chuyện phiếm), bạn BẮT BUỘC PHẢI TỪ CHỐI THẲNG THẮN VÀ LỊCH SỰ, "
+            "không được sử dụng kiến thức nền của mình để trả lời hộ.\n"
+            "3. MẪU TỪ CHỐI BẮT BUỘC: Khi học sinh hỏi lạc đề, hãy đáp lại nguyên văn hoặc tương tự cấu trúc sau: "
+            "'Xin lỗi em, anh là trợ lý ảo chuyên trách môn Cấu trúc dữ liệu và Giải thuật (DSA). Anh không thể giải đáp "
+            "các thắc mắc nằm ngoài phạm vi môn học này. Em vui lòng đặt câu hỏi liên quan đến DSA nhé!'\n"
+            "4. XỬ LÝ CHÀO HỎI: Nếu người dùng chỉ chào hỏi (Ví dụ: 'hello', 'chào anh'), hãy đáp lại thân mật, ngắn gọn "
+            "và nhắc nhở các em đặt câu hỏi về chủ đề bài học DSA.\n"
+            "5. XỬ LÝ CODE DSA: Phân tích lỗi sai -> Sửa code trong khối ``` -> Giải thích lý thuyết.\n"
+            "6. ĐỊNH DẠNG: Mỗi đoạn mã phải nằm trong khối ```. Trả lời hoàn toàn bằng Tiếng Việt."
         )
 
         # Lịch sử chung cho cả 2 mảng, định dạng: [{"role": "user"/"assistant", "content": ...}]
@@ -128,14 +140,16 @@ class RAGChain:
         chunks       = self.vector_store.search(question, k=TOP_K_RESULTS)
         context_text = "\n\n".join([c.page_content for c in chunks]) if chunks else ""
 
+        # LỚP BẢO VỆ 2: Thêm chỉ thị tối cao ngay trong Prompt RAG ép AI kiểm tra nội dung
         prompt_rag = f"""NGỮ CẢNH HỖ TRỢ TỪ GIÁO TRÌNH:
 {context_text if context_text else "Không tìm thấy tài liệu phù hợp trong DB."}
 
 CÂU HỎI CỦA SINH VIÊN:
 {question}
 
-HƯỚNG DẪN TRẢ LỜI:
-- Trả lời thẳng vào vấn đề.
+HƯỚNG DẪN TRẢ LỜI (BẮT BUỘC TUÂN THỦ):
+- Nếu câu hỏi KHÔNG LIÊN QUAN ĐẾN DSA (Cấu trúc dữ liệu và Giải thuật), hãy TỪ CHỐI trả lời ngay lập tức theo quy định hệ thống.
+- Nếu câu hỏi đúng chủ đề DSA, trả lời thẳng vào vấn đề.
 - TUYỆT ĐỐI KHÔNG dùng cụm từ 'Dựa trên giáo trình được cung cấp'.
 - TRẢ LỜI HOÀN TOÀN BẰNG TIẾNG VIỆT."""
 
@@ -156,18 +170,15 @@ HƯỚNG DẪN TRẢ LỜI:
                 answer     = self._call_groq(prompt_rag)
                 model_used = f"Groq ({self.groq_model})"
             except Exception as groq_error:
-                # SỬA LỖI: Tránh trả lỗi thô kỹ thuật làm bẩn giao diện hiển thị của người dùng
                 print(f"[CRITICAL] Hệ thống sập hoàn toàn!\n- Gemini: {gemini_error}\n- Groq: {groq_error}")
                 answer     = "Xin lỗi em, hệ thống máy chủ của trợ lý ảo đang quá tải hoặc gặp sự cố kỹ thuật ngắn hạn. Em vui lòng thử gửi lại câu hỏi sau vài giây nhé!"
                 model_used = "Error/None"
 
-        # BƯỚC 3: CẬP NHẬT LỊCH SỬ (Chỉ lưu câu hỏi gốc khi AI phản hồi thành công thực sự)
-        # SỬA LỖI LOGIC: Không lưu các lượt hội thoại sinh lỗi hệ thống để tránh làm hỏng cấu trúc ngữ cảnh tiếp theo
+        # BƯỚC 3: CẬP NHẬT LỊCH SỬ
         if model_used != "Error/None":
             self.history.append({"role": "user",      "content": question})
             self.history.append({"role": "assistant", "content": answer})
 
-        # Cắt bớt lịch sử ngay sau khi append để kiểm soát chính xác kích thước mảng ngữ cảnh
         self._trim_history()
 
         # BƯỚC 4: TRÍCH XUẤT NGUỒN TÀI LIỆU
