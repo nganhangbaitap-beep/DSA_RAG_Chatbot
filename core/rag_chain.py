@@ -25,7 +25,7 @@ class RAGChain:
 
         # 2. Khởi tạo Client Groq (Mô hình dự phòng) — import lazy tránh crash
         self.groq_api_key = os.getenv("GROQ_API_KEY", "")
-        self.groq_model   = os.getenv("GROQ_MODEL", "llama3-70b-8192")
+        self.groq_model   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         self.groq_client  = None
 
         if self.groq_api_key:
