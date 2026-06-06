@@ -2,19 +2,17 @@
 # app.py
 
 import os
-import sys
 import streamlit as st
-from datetime import datetime
-from collections import Counter
-
 import gspread
 from google.oauth2.service_account import Credentials
+from datetime import datetime, timezone, timedelta
 
-# Nạp các cấu hình cũ của bạn
+# Nạp các cấu hình hằng số từ file config
 from config import GOOGLE_SHEET_NAME, TAB_DANH_SACH, TAB_LICH_SU
-from core import VectorStore, GeminiEmbedder, RAGChain
+# Nạp các module xử lý AI từ thư mục core
+from core import VectorStore, GeminiEmbedder, RAGChain 
 
-# Cấu hình trang Streamlit
+# Cấu hình giao diện trang Streamlit
 st.set_page_config(page_title="DSA Assistant", page_icon="🤖", layout="centered")
 
 # ============================================================
@@ -27,14 +25,13 @@ def get_google_sheet():
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # Ở local: đọc từ file google_creds.json
-    # Trên Hugging Face: Bạn copy nội dung file JSON dán vào Secret tên GOOGLE_CREDS_JSON
+    # Ưu tiên lấy từ biến môi trường (Hugging Face / Server)
     if "GOOGLE_CREDS_JSON" in os.environ:
         import json
         creds_dict = json.loads(os.environ["GOOGLE_CREDS_JSON"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else:
-        # Chạy local
+        # Lấy từ file cục bộ (Chạy Local trên máy tính)
         if not os.path.exists("google_creds.json"):
             st.error("❌ Thiếu file google_creds.json để kết nối Google Sheets!")
             st.stop()
@@ -45,49 +42,45 @@ def get_google_sheet():
 
 
 # ============================================================
-# HÀM XỬ LÝ ĐỒNG BỘ KHI ĐĂNG XUẤT (LƯU LỊCH SỬ)
+# HÀM XỬ LÝ ĐỒNG BỘ KHI ĐĂNG XUẤT (LƯU LỊCH SỬ TINH GỌN)
 # ============================================================
-def xu_ly_dang_xuat_va_luu_sheets(mssv, list_questions):
-    """Tính toán dữ liệu và đẩy lên Google Sheets khi học sinh đăng xuất."""
-    if not list_questions:
-        total_q = 0
-        final_q_str = "Không đặt câu hỏi nào"
-    else:
-        total_q = len(list_questions)
-        
-        # 1. Chuẩn hóa (chữ thường, xóa khoảng trắng thừa) để đếm cho chính xác
-        normalized_questions = [q.strip().lower() for q in list_questions]
-        occurence_count = Counter(normalized_questions)
-        
-        # Lấy câu xuất hiện nhiều nhất và số lần của nó
-        most_common_item, so_lan = occurence_count.most_common(1)[0]
-        
-        # 2. Xử lý logic như bạn đề xuất
-        if so_lan == 1:
-            # Nếu chỉ hỏi 1 lần -> Lấy câu dài nhất từ danh sách gốc (giữ nguyên Hoa/Thường)
-            most_common_q = max(list_questions, key=len)
-            ghi_chu = "không có câu hỏi trùng lặp"
-        else:
-            # Nếu có trùng lặp -> Tìm lại câu gốc tương ứng để giữ nguyên định dạng
-            most_common_q = next(q for q in list_questions if q.strip().lower() == most_common_item)
-            ghi_chu = f"hỏi {so_lan} lần"
+def xu_ly_dang_xuat_va_luu_sheets(mssv, chat_history):
+    """Ghi từng câu hỏi DSA thành 1 dòng riêng, lọc bỏ câu ngắn và câu lạc đề, chuẩn hóa giờ VN."""
 
-        # 3. Cắt bớt nếu câu hỏi quá dài (Trừ hao không gian cho phần ghi chú)
-        if len(most_common_q) > 130:
-            most_common_q = most_common_q[:127] + "..."
+    # Chuỗi từ chối nhận diện câu lạc đề (khớp với SYSTEM_PROMPT trong config.py)
+    CAU_TU_CHOI_MAC_DINH = "Không trả lời về thời tiết, đời tư, chính trị, hoặc chủ đề hoàn toàn không liên quan đến học tập lập trình" 
+    
+    rows_to_append = []
+    
+    # Khởi tạo múi giờ Việt Nam (UTC+7) để chạy chuẩn trên server quốc tế
+    tz_vietnam = timezone(timedelta(hours=7))
+    thoi_gian_vn = datetime.now(tz_vietnam).strftime("%Y-%m-%d %H:%M:%S")
 
-        # Nối kết quả cuối cùng
-        final_q_str = f"{most_common_q} ({ghi_chu})"
+    current_question = ""
+    # Duyệt qua toàn bộ lịch sử hội thoại của sinh viên
+    for msg in chat_history:
+        if msg["role"] == "user":
+            current_question = msg["content"].strip()
+        elif msg["role"] == "assistant" and current_question:
+            ai_response = msg["content"]
+            
+            # LỌC KÉP: Chỉ lấy câu hỏi dài hơn 5 ký tự và AI KHÔNG từ chối trả lời
+            if len(current_question) > 5 and CAU_TU_CHOI_MAC_DINH not in ai_response:
+                # Đóng gói dữ liệu thành mảng chuẩn: [Cột A, Cột B, Cột C]
+                rows_to_append.append([mssv, thoi_gian_vn, current_question])
+            
+            # Reset biến để duyệt vòng lặp bắt cặp tiếp theo
+            current_question = ""
 
-    thoi_gian = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Nếu sinh viên chỉ nhắn câu rác hoặc không hỏi gì hợp lệ thì bỏ qua không gọi Sheets API
+    if not rows_to_append:
+        return True  
 
+    # Ghi dữ liệu hàng loạt (Batch Insert) siêu tốc lên Google Sheets
     try:
-        sh = get_google_sheet()
+        sh  = get_google_sheet()
         wks = sh.worksheet(TAB_LICH_SU)
-        
-        # Thêm một dòng mới vào cuối bảng LichSuDangXuat
-        # Cột: Mã SV | Thời Gian Đăng Xuất | Tổng Số Câu Hỏi | Câu Hỏi Được Hỏi Nhiều Nhất
-        wks.append_row([mssv, thoi_gian, total_q, final_q_str])
+        wks.append_rows(rows_to_append) 
         return True
     except Exception as e:
         print(f"Lỗi ghi dữ liệu đăng xuất lên Sheets: {e}")
@@ -99,28 +92,24 @@ def xu_ly_dang_xuat_va_luu_sheets(mssv, list_questions):
 # ============================================================
 if "rag_chain" not in st.session_state:
     try:
-        embedder = GeminiEmbedder()
+        embedder = GeminiEmbedder() 
         vs = VectorStore(embedder)
         st.session_state.rag_chain = RAGChain(vs)
     except Exception as e:
         st.error(f"Lỗi khởi tạo hệ thống AI: {e}")
         st.stop()
 
-# Biến kiểm soát trạng thái đăng nhập
+# Biến kiểm soát trạng thái đăng nhập MSSV
 if "authenticated_mssv" not in st.session_state:
     st.session_state.authenticated_mssv = None
 
-# Mảng lưu danh sách các câu hỏi dạng text thuần túy của học sinh trong phiên này
-if "session_questions" not in st.session_state:
-    st.session_state.session_questions = []
-
-# Mảng hiển thị UI chat
+# Mảng lưu trữ toàn bộ hội thoại UI chat trong một phiên
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
 # ============================================================
-# MÀN HÌNH 1: GIAO DIỆN ĐĂNG NHẬP (KIỂM TRA CHÍNH XÁC MASV)
+# MÀN HÌNH 1: GIAO DIỆN ĐĂNG NHẬP (KIỂM TRA CHÍNH XÁC MSSV)
 # ============================================================
 if not st.session_state.authenticated_mssv:
     st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>🤖 DSA Assistant - Xác Thực Sinh Viên</h2>", unsafe_allow_html=True)
@@ -141,16 +130,15 @@ if not st.session_state.authenticated_mssv:
                         # Lấy toàn bộ giá trị của cột số 1 (Cột MSSV)
                         danh_sach_mssv_hop_le = [str(x).strip().upper() for x in wks.col_values(1)]
                         
-                        # Kiểm tra xem MASV học sinh nhập có trong danh sách không
+                        # Kiểm tra xem MSSV sinh viên nhập có khớp không
                         if input_mssv in danh_sach_mssv_hop_le:
                             st.session_state.authenticated_mssv = input_mssv
-                            st.session_state.session_questions = []
-                            st.session_state.messages = [{"role": "assistant", "content": f"Chào em **{input_mssv}**! Anh là trợ lý học tập môn DSA. Hôm nay em cần hỗ trợ gì về cấu trúc dữ liệu, giải thuật hoặc sửa code?"}]
+                            # Gửi tin nhắn chào mừng mặc định
+                            st.session_state.messages = [{"role": "assistant", "content": f"Chào em **{input_mssv}**! Tôi là trợ lý học tập môn DSA. Hôm nay bạn cần hỗ trợ gì về cấu trúc dữ liệu, giải thuật hoặc sửa code?"}]
                             st.success("✅ Xác thực thành công!")
                             st.rerun()
                         else:
-                            # BÁO LỖI NẾU ĐĂNG NHẬP KHÔNG ĐÚNG
-                            st.error("❌ Mã số sinh viên không chính xác hoặc không nằm trong danh sách được cấp phép của Giáo viên!")
+                            st.error("❌ Mã số sinh viên không chính xác hoặc không nằm trong danh sách lớp!")
                     except Exception as e:
                         st.error(f"⚠️ Không thể kết nối tới Google Sheets dữ liệu. Lỗi: {e}")
     st.stop()
@@ -161,41 +149,40 @@ if not st.session_state.authenticated_mssv:
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
-# Thanh Sidebar hiển thị thông tin và nút Đăng xuất
+# Thanh Sidebar chứa nút Đăng xuất
 st.sidebar.markdown(f"👤 **Sinh viên:** `{current_user}`")
 
 if st.sidebar.button("🚪 Đăng xuất & Nộp báo cáo"):
-    with st.spinner("🔄 Đang đồng bộ lịch sử buổi học Giáo viên..."):
-        # Gọi hàm đồng bộ dữ liệu
-        thanh_cong = xu_ly_dang_xuat_va_luu_sheets(current_user, st.session_state.session_questions)
+    with st.spinner("🔄 Đang lọc dữ liệu và đồng bộ báo cáo lên Google Sheets..."):
+        # Gọi hàm xử lý truyền vào toàn bộ lịch sử messages
+        thanh_cong = xu_ly_dang_xuat_va_luu_sheets(current_user, st.session_state.messages)
+        
         if thanh_cong:
-            st.sidebar.success("Đã lưu báo cáo!")
+            st.sidebar.success("Đã lưu báo cáo thành công!")
+        else:
+            st.sidebar.error("Lỗi đồng bộ dữ liệu!")
         
         # Reset toàn bộ trạng thái phiên làm việc để quay về màn hình đăng nhập
         st.session_state.authenticated_mssv = None
-        st.session_state.session_questions = []
         st.session_state.messages = []
         st.rerun()
 
 st.title(f"🤖 DSA Assistant (Phòng học của {current_user})")
 
-# Hiển thị lại các tin nhắn cũ trong phiên chat hiện tại
+# Render hiển thị lại các tin nhắn cũ trong phiên chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Ô nhập câu hỏi của Học sinh
+# Ô nhập dữ liệu Chat của Sinh viên
 if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cần debug vào đây..."):
     
-    # 1. Hiển thị tin nhắn của học sinh lên UI
+    # 1. Hiển thị tin nhắn của sinh viên lên UI và lưu vào messages
     with st.chat_message("user"):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # 2. Lưu câu hỏi vào danh sách thống kê câu hỏi của phiên này
-    st.session_state.session_questions.append(prompt)
-    
-    # 3. Gọi RAGChain xử lý câu trả lời
+    # 2. Gọi Hệ thống RAG xử lý câu trả lời
     with st.chat_message("assistant"):
         with st.spinner("🤖 Đang suy nghĩ..."):
             try:
@@ -203,15 +190,15 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
                 ans = res.get("answer", "Hệ thống không trả về câu trả lời.")
                 sources = res.get("sources", [])
                 
-                # Hiển thị câu trả lời
+                # Hiển thị câu trả lời và Nguồn tài liệu tham khảo
                 st.markdown(ans)
                 if sources:
                     st.caption(f"📄 Tài liệu tham khảo: {', '.join(sources)}")
                 
-                # Lưu vào lịch sử hiển thị UI
+                # Lưu câu trả lời của AI vào mảng UI
                 st.session_state.messages.append({"role": "assistant", "content": ans})
                 
             except Exception as e:
-                err = f"❌ Đã xảy ra lỗi hệ thống: {e}"
+                err = f"❌ Đã xảy ra lỗi hệ thống. Có thể do quá tải, thử lại sau. (Lỗi: {e})"
                 st.error(err)
                 st.session_state.messages.append({"role": "assistant", "content": err})
