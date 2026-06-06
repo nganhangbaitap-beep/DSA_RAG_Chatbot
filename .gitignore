@@ -14,6 +14,6 @@ data/*
 !data/.gitkeep
 .venv/
 __pycache__/
-chroma_db/
+
 *.json
 !.env.example
