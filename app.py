@@ -18,10 +18,68 @@ from core import VectorStore, GeminiEmbedder, RAGChain
 st.set_page_config(page_title="DSA Assistant", page_icon="🤖", layout="centered")
 
 # ============================================================
+# TÙY CHỈNH GIAO DIỆN NÂNG CAO (CSS NÚT ĐĂNG XUẤT ĐÁY)
+# ============================================================
+st.markdown("""
+<style>
+/* 1. Nâng khung nhập liệu Chat lên 70px để nhường chỗ cho nút Đăng xuất ở dưới cùng */
+div[data-testid="stChatInput"] {
+    bottom: 70px !important;
+}
+
+/* 2. Đẩy phần đệm của trang web lên để nội dung tin nhắn không bị che khuất */
+.stApp {
+    padding-bottom: 150px !important;
+}
+
+/* 3. Bắt chính xác vùng chứa nút Đăng xuất nhờ mỏ neo (anchor) và ghim xuống đáy */
+div.element-container:has(#logout-anchor) {
+    display: none; /* Ẩn mỏ neo vô hình */
+}
+
+div.element-container:has(#logout-anchor) + div.element-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 70px;
+    background-color: #ffffff; /* Nền trắng bám đáy */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    box-shadow: 0px -4px 15px rgba(0, 0, 0, 0.08); /* Đổ bóng nhẹ phân cách với khung chat */
+}
+
+/* 4. Trang trí nút Đăng xuất tuyệt đẹp (Bo tròn mềm mại, viền đỏ, chữ đậm) */
+div.element-container:has(#logout-anchor) + div.element-container button {
+    background-color: #fff0f0 !important;
+    color: #ff4b4b !important;
+    border: 2px solid #ff4b4b !important;
+    border-radius: 50px !important; /* Bo góc tròn hoàn toàn như App Mobile */
+    padding: 10px 0px !important;
+    font-weight: 800 !important;
+    font-size: 16px !important;
+    width: 90% !important;
+    max-width: 400px !important;
+    transition: all 0.3s ease !important;
+}
+
+/* 5. Hiệu ứng khi lướt chuột/chạm tay vào (Hover) */
+div.element-container:has(#logout-anchor) + div.element-container button:hover {
+    background-color: #ff4b4b !important;
+    color: #ffffff !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0px 5px 15px rgba(255, 75, 75, 0.3) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
 # HÀM KẾT NỐI GOOGLE SHEETS BẢO MẬT
 # ============================================================
 def get_google_sheet():
-    """Kết nối tới Google Sheet bằng file JSON bảo mật."""
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
@@ -45,43 +103,30 @@ def get_google_sheet():
 # HÀM GHI LOG REAL-TIME (CHẠY NGẦM BẰNG THREADING)
 # ============================================================
 def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
-    """Ghi trực tiếp 1 câu hỏi lên Sheets ngay khi chat xong, nén code thành 1 dòng."""
-    
-    # 1. BỘ LỌC THÔNG MINH DỰA VÀO PHẢN HỒI CỦA AI (Chặn lưu câu hỏi ngoài phạm vi)
-    # Nếu AI kích hoạt câu từ chối theo mẫu hệ thống -> Lập tức thoát, không lưu rác vào Sheets
     if "Xin lỗi, tôi là trợ lý ảo chuyên trách" in cau_tra_loi:
         return 
         
-    # Chặn thêm các câu chào hỏi hoặc chat quá ngắn vô nghĩa (< 5 ký tự)
     if len(cau_hoi.strip()) <= 5:
         return
 
-    # 2. ÉP ĐOẠN CODE VỀ 1 DÒNG SIÊU SẠCH (Xử lý dứt điểm vỡ dòng Excel)
-    # Thay thế toàn bộ dấu xuống dòng của Windows (\r\n), Mac/Linux (\n), (\r) bằng dấu mũi tên
     clean_question = cau_hoi.strip()
     clean_question = clean_question.replace("\r\n", " ➔ ").replace("\n", " ➔ ").replace("\r", " ➔ ")
 
-    # Khởi tạo múi giờ VN (UTC+7)
     tz_vietnam = timezone(timedelta(hours=7))
     thoi_gian_vn = datetime.now(tz_vietnam).strftime("%Y-%m-%d %H:%M:%S")
 
-    # Tiến hành ghi dữ liệu ngầm lên Google Sheets
     try:
         sh  = get_google_sheet()
         wks = sh.worksheet(TAB_LICH_SU)
-        
-        # Tìm dòng trống thực tế tiếp theo dựa theo cột A
         values_in_col_a = wks.col_values(1)
         next_row = len(values_in_col_a) + 1
-        
-        # Ghi một dòng dữ liệu duy nhất phẳng lỳ
         wks.insert_rows([[mssv, thoi_gian_vn, clean_question]], row=next_row) 
     except Exception as e:
         print(f"--- [LOG LỖI GHI SHEETS] {e} ---")
 
 
 # ============================================================
-# KHỞI TẠO HỆ THỐNG RAG VÀ PHIÊN LÀM VIỆC (SESSION STATE)
+# KHỞI TẠO HỆ THỐNG RAG VÀ PHIÊN LÀM VIỆC
 # ============================================================
 if "rag_chain" not in st.session_state:
     try:
@@ -137,15 +182,13 @@ if not st.session_state.authenticated_mssv:
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
-# Tiêu đề phòng học chính
 st.title(f"🤖 DSA Assistant (Phòng học của {current_user})")
 
-# Hiển thị lịch sử chat của sinh viên
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Khung nhập liệu câu hỏi chat (Mặc định được Streamlit ghim cố định ở đáy viewport)
+# Khung nhập liệu câu hỏi chat
 if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cần debug vào đây..."):
     
     with st.chat_message("user"):
@@ -158,7 +201,6 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             ans = res.get("answer", "Hệ thống không trả về câu trả lời.")
             sources = res.get("sources", [])
             
-            # CƠ CHẾ STREAM: Hiển thị chữ mượt mà thời gian thực
             def stream_generator():
                 for word in ans.split(" "):
                     yield word + " "
@@ -171,11 +213,12 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             
             st.session_state.messages.append({"role": "assistant", "content": ans})
             
-            # GHI REAL-TIME QUA LUỒNG PHỤ THREADING
             threading.Thread(
                 target=ghi_log_realtime, 
                 args=(current_user, prompt, ans)
             ).start()
+            
+            st.rerun() # Refresh lại để giữ khung UI mượt mà
             
         except Exception as e:
             err = f"❌ Đã xảy ra lỗi hệ thống. Có thể do quá tải, thử lại sau. (Lỗi: {e})"
@@ -183,10 +226,10 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             st.session_state.messages.append({"role": "assistant", "content": err})
 
 # ============================================================
-# NÚT ĐĂNG XUẤT ĐẶT Ở PHÍA CUỐI TRANG (DỄ DÀNG THAO TÁC TRÊN ĐIỆN THOẠI)
+# NÚT ĐĂNG XUẤT ĐƯỢC ÉP BÁM ĐÁY (DƯỚI CÙNG TRANG WEB) BẰNG CSS MỎ NEO
 # ============================================================
-st.markdown("---") # Đường kẻ phân cách trực quan kết thúc buổi học
-if st.button("🚪 Đăng xuất khỏi phòng học", use_container_width=True, type="secondary"):
+st.markdown('<span id="logout-anchor"></span>', unsafe_allow_html=True) # Mỏ neo vô hình để CSS nhận diện
+if st.button("🚪 Đăng xuất khỏi phòng học"):
     st.session_state.authenticated_mssv = None
     st.session_state.messages = []
     st.rerun()
