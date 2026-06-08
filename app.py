@@ -46,39 +46,42 @@ def get_google_sheet():
 # ============================================================
 def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
     """Ghi trực tiếp 1 câu hỏi lên Sheets ngay khi chat xong, nén code thành 1 dòng."""
-    # Danh sách từ khóa lạc đề cần chặn
-    TU_KHOA_LAC_DE = ["thời tiết", "nấu ăn", "món ăn", "nghị luận xã hội", "ca sĩ", "phim ảnh", "chính trị"]
     
-    cau_hoi_lower = cau_hoi.lower()
-    la_hop_le = len(cau_hoi) > 5 and not any(tk in cau_hoi_lower for tk in TU_KHOA_LAC_DE)
-    
-    if not la_hop_le:
-        return # Nếu không hợp lệ thì thoát, không ghi
+    # 1. BỘ LỌC THÔNG MINH DỰA VÀO PHẢN HỒI CỦA AI (Chặn lưu câu hỏi ngoài phạm vi)
+    # Nếu AI kích hoạt câu từ chối theo mẫu hệ thống -> Lập tức thoát, không lưu rác vào Sheets
+    if "Xin lỗi, tôi là trợ lý ảo chuyên trách" in cau_tra_loi:
+        return 
+        
+    # Chặn thêm các câu chào hỏi hoặc chat quá ngắn vô nghĩa (< 5 ký tự)
+    if len(cau_hoi.strip()) <= 5:
+        return
 
-    # Khởi tạo múi giờ VN
+    # 2. ÉP ĐOẠN CODE VỀ 1 DÒNG SIÊU SẠCH (Xử lý dứt điểm vỡ dòng Excel)
+    # Thay thế toàn bộ dấu xuống dòng của Windows (\r\n), Mac/Linux (\n), (\r) bằng dấu mũi tên
+    clean_question = cau_hoi.strip()
+    clean_question = clean_question.replace("\r\n", " ➔ ").replace("\n", " ➔ ").replace("\r", " ➔ ")
+
+    # Khởi tạo múi giờ VN (UTC+7)
     tz_vietnam = timezone(timedelta(hours=7))
     thoi_gian_vn = datetime.now(tz_vietnam).strftime("%Y-%m-%d %H:%M:%S")
 
-    # Loại bỏ hoàn toàn xuống dòng, biến code dài thành 1 dòng duy nhất
-    clean_question = cau_hoi.strip().replace("\n", " ➔ ")
-
-    # Tiến hành ghi dữ liệu (Sử dụng insert_rows để chống nhảy dòng)
+    # Tiến hành ghi dữ liệu ngầm lên Google Sheets
     try:
         sh  = get_google_sheet()
         wks = sh.worksheet(TAB_LICH_SU)
         
-        # Tìm dòng trống thực tế dựa theo cột A
+        # Tìm dòng trống thực tế tiếp theo dựa theo cột A
         values_in_col_a = wks.col_values(1)
         next_row = len(values_in_col_a) + 1
         
-        # Ghi 1 dòng dữ liệu duy nhất
+        # Ghi một dòng dữ liệu duy nhất phẳng lỳ
         wks.insert_rows([[mssv, thoi_gian_vn, clean_question]], row=next_row) 
     except Exception as e:
         print(f"--- [LOG LỖI GHI SHEETS] {e} ---")
 
 
 # ============================================================
-# KHỞI TẠO HỆ THỐNG RAG VÀ PHIÊN LÀM VIỆC
+# KHỞI TẠO HỆ THỐNG RAG VÀ PHIÊN LÀM VIỆC (SESSION STATE)
 # ============================================================
 if "rag_chain" not in st.session_state:
     try:
@@ -134,23 +137,15 @@ if not st.session_state.authenticated_mssv:
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
-# Đưa nút Đăng xuất ra màn hình chính thay vì giấu trong Sidebar
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.markdown(f"### 🤖 Phòng học của `{current_user}`")
-with col2:
-    st.write("") # Căn chỉnh cho đẹp
-    if st.button("🚪 Đăng xuất", use_container_width=True):
-        st.session_state.authenticated_mssv = None
-        st.session_state.messages = []
-        st.rerun()
+# Tiêu đề phòng học chính
+st.title(f"🤖 DSA Assistant (Phòng học của {current_user})")
 
-# Hiển thị lịch sử chat
+# Hiển thị lịch sử chat của sinh viên
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Khung nhập liệu chat
+# Khung nhập liệu câu hỏi chat (Mặc định được Streamlit ghim cố định ở đáy viewport)
 if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cần debug vào đây..."):
     
     with st.chat_message("user"):
@@ -163,11 +158,11 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             ans = res.get("answer", "Hệ thống không trả về câu trả lời.")
             sources = res.get("sources", [])
             
-            # CƠ CHẾ STREAM: Đổ chữ ra màn hình từ từ giống ChatGPT
+            # CƠ CHẾ STREAM: Hiển thị chữ mượt mà thời gian thực
             def stream_generator():
                 for word in ans.split(" "):
                     yield word + " "
-                    time.sleep(0.03) # Tốc độ gõ chữ
+                    time.sleep(0.03)
                     
             st.write_stream(stream_generator)
             
@@ -176,7 +171,7 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             
             st.session_state.messages.append({"role": "assistant", "content": ans})
             
-            # GHI REAL-TIME BẰNG LUỒNG PHỤ (Không làm giật lag giao diện)
+            # GHI REAL-TIME QUA LUỒNG PHỤ THREADING
             threading.Thread(
                 target=ghi_log_realtime, 
                 args=(current_user, prompt, ans)
@@ -186,3 +181,12 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             err = f"❌ Đã xảy ra lỗi hệ thống. Có thể do quá tải, thử lại sau. (Lỗi: {e})"
             st.error(err)
             st.session_state.messages.append({"role": "assistant", "content": err})
+
+# ============================================================
+# NÚT ĐĂNG XUẤT ĐẶT Ở PHÍA CUỐI TRANG (DỄ DÀNG THAO TÁC TRÊN ĐIỆN THOẠI)
+# ============================================================
+st.markdown("---") # Đường kẻ phân cách trực quan kết thúc buổi học
+if st.button("🚪 Đăng xuất khỏi phòng học", use_container_width=True, type="secondary"):
+    st.session_state.authenticated_mssv = None
+    st.session_state.messages = []
+    st.rerun()
