@@ -14,66 +14,8 @@ from config import GOOGLE_SHEET_NAME, TAB_DANH_SACH, TAB_LICH_SU
 # Nạp các module xử lý AI từ thư mục core
 from core import VectorStore, GeminiEmbedder, RAGChain 
 
-# Cấu hình giao diện trang Streamlit
+# Cấu hình giao diện trang Streamlit (Xóa bỏ toàn bộ phần CSS Hack cũ để giao diện tự động co giãn chuẩn)
 st.set_page_config(page_title="DSA Assistant", page_icon="🤖", layout="centered")
-
-# ============================================================
-# TÙY CHỈNH GIAO DIỆN NÂNG CAO (CSS NÚT ĐĂNG XUẤT ĐÁY)
-# ============================================================
-st.markdown("""
-<style>
-/* 1. Nâng khung nhập liệu Chat lên 70px để nhường chỗ cho nút Đăng xuất ở dưới cùng */
-div[data-testid="stChatInput"] {
-    bottom: 70px !important;
-}
-
-/* 2. Đẩy phần đệm của trang web lên để nội dung tin nhắn không bị che khuất */
-.stApp {
-    padding-bottom: 150px !important;
-}
-
-/* 3. Bắt chính xác vùng chứa nút Đăng xuất nhờ mỏ neo (anchor) và ghim xuống đáy */
-div.element-container:has(#logout-anchor) {
-    display: none; /* Ẩn mỏ neo vô hình */
-}
-
-div.element-container:has(#logout-anchor) + div.element-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 70px;
-    background-color: #ffffff; /* Nền trắng bám đáy */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 999999;
-    box-shadow: 0px -4px 15px rgba(0, 0, 0, 0.08); /* Đổ bóng nhẹ phân cách với khung chat */
-}
-
-/* 4. Trang trí nút Đăng xuất tuyệt đẹp (Bo tròn mềm mại, viền đỏ, chữ đậm) */
-div.element-container:has(#logout-anchor) + div.element-container button {
-    background-color: #fff0f0 !important;
-    color: #ff4b4b !important;
-    border: 2px solid #ff4b4b !important;
-    border-radius: 50px !important; /* Bo góc tròn hoàn toàn như App Mobile */
-    padding: 10px 0px !important;
-    font-weight: 800 !important;
-    font-size: 16px !important;
-    width: 90% !important;
-    max-width: 400px !important;
-    transition: all 0.3s ease !important;
-}
-
-/* 5. Hiệu ứng khi lướt chuột/chạm tay vào (Hover) */
-div.element-container:has(#logout-anchor) + div.element-container button:hover {
-    background-color: #ff4b4b !important;
-    color: #ffffff !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0px 5px 15px rgba(255, 75, 75, 0.3) !important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 
 # ============================================================
@@ -182,13 +124,26 @@ if not st.session_state.authenticated_mssv:
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
-st.title(f"🤖 DSA Assistant (Phòng học của {current_user})")
+# --- 🛠️ ĐƯA THÔNG TIN & NÚT ĐĂNG XUẤT VÀO THANH BÊN (SIDEBAR) 🛠️ ---
+with st.sidebar:
+    st.markdown(f"### 👤 Tài khoản: **{current_user}**")
+    st.caption("Trợ lý học tập chuyên trách môn DSA")
+    st.markdown("---")
+    
+    # Nút Đăng xuất dạng Primary (Màu đỏ sẫm mặc định của Streamlit) chiếm trọn chiều rộng thanh bên
+    if st.button("🚪 Đăng xuất khỏi phòng học", use_container_width=True, type="primary"):
+        st.session_state.authenticated_mssv = None
+        st.session_state.messages = []
+        st.rerun()
+
+# --- KHÔNG GIAN CHAT CHÍNH ---
+st.title("🤖 DSA Assistant")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Khung nhập liệu câu hỏi chat
+# Khung nhập liệu câu hỏi chat - BÂY GIỜ HOÀN TOÀN KHÔNG BỊ LỖI HIỂN THỊ
 if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cần debug vào đây..."):
     
     with st.chat_message("user"):
@@ -218,18 +173,9 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
                 args=(current_user, prompt, ans)
             ).start()
             
-            st.rerun() # Refresh lại để giữ khung UI mượt mà
+            st.rerun()
             
         except Exception as e:
             err = f"❌ Đã xảy ra lỗi hệ thống. Có thể do quá tải, thử lại sau. (Lỗi: {e})"
             st.error(err)
             st.session_state.messages.append({"role": "assistant", "content": err})
-
-# ============================================================
-# NÚT ĐĂNG XUẤT ĐƯỢC ÉP BÁM ĐÁY (DƯỚI CÙNG TRANG WEB) BẰNG CSS MỎ NEO
-# ============================================================
-st.markdown('<span id="logout-anchor"></span>', unsafe_allow_html=True) # Mỏ neo vô hình để CSS nhận diện
-if st.button("🚪 Đăng xuất khỏi phòng học"):
-    st.session_state.authenticated_mssv = None
-    st.session_state.messages = []
-    st.rerun()
