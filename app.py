@@ -3,6 +3,7 @@
 
 import os
 import time
+import threading
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -17,7 +18,7 @@ from core import VectorStore, GeminiEmbedder, RAGChain
 st.set_page_config(page_title="DSA Assistant", page_icon="🤖", layout="centered")
 
 # ============================================================
-# HÀM KẾT NỐI GOOGLE SHEETS BẢO MẬT (Tương thích Hugging Face)
+# HÀM KẾT NỐI GOOGLE SHEETS BẢO MẬT
 # ============================================================
 def get_google_sheet():
     """Kết nối tới Google Sheet bằng file JSON bảo mật."""
@@ -26,13 +27,11 @@ def get_google_sheet():
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # Ưu tiên lấy từ biến môi trường (Hugging Face / Server)
     if "GOOGLE_CREDS_JSON" in os.environ:
         import json
         creds_dict = json.loads(os.environ["GOOGLE_CREDS_JSON"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else:
-        # Lấy từ file cục bộ (Chạy Local trên máy tính)
         if not os.path.exists("google_creds.json"):
             st.error("❌ Thiếu file google_creds.json để kết nối Google Sheets!")
             st.stop()
@@ -43,51 +42,43 @@ def get_google_sheet():
 
 
 # ============================================================
-# HÀM XỬ LÝ ĐỒNG BỘ CHẠY NGẦM KHI ĐĂNG XUẤT (ẨN THÔNG BÁO)
+# HÀM GHI LOG REAL-TIME (CHẠY NGẦM BẰNG THREADING)
 # ============================================================
-def xu_ly_dang_xuat_va_luu_sheets(mssv, chat_history):
-    """Ghi dữ liệu âm thầm, trả về True nếu thành công, False nếu thất bại."""
+def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
+    """Ghi trực tiếp 1 câu hỏi lên Sheets ngay khi chat xong, nén code thành 1 dòng."""
+    # Danh sách từ khóa lạc đề cần chặn
+    TU_KHOA_LAC_DE = ["thời tiết", "nấu ăn", "món ăn", "nghị luận xã hội", "ca sĩ", "phim ảnh", "chính trị"]
+    
+    cau_hoi_lower = cau_hoi.lower()
+    la_hop_le = len(cau_hoi) > 5 and not any(tk in cau_hoi_lower for tk in TU_KHOA_LAC_DE)
+    
+    if not la_hop_le:
+        return # Nếu không hợp lệ thì thoát, không ghi
 
-    # Chuỗi từ chối nhận diện câu lạc đề
-    CAU_TU_CHOI_MAC_DINH = "Không trả lời về thời tiết, đời tư, chính trị, hoặc chủ đề hoàn toàn không liên quan đến học tập lập trình" 
-    
-    rows_to_append = []
-    
-    # Khởi tạo múi giờ Việt Nam (UTC+7)
+    # Khởi tạo múi giờ VN
     tz_vietnam = timezone(timedelta(hours=7))
     thoi_gian_vn = datetime.now(tz_vietnam).strftime("%Y-%m-%d %H:%M:%S")
 
-    current_question = ""
-    for msg in chat_history:
-        if msg["role"] == "user":
-            current_question = msg["content"].strip()
-        elif msg["role"] == "assistant" and current_question:
-            ai_response = msg["content"]
-            
-            # Bộ lọc kép bảo vệ dữ liệu sạch
-            if len(current_question) > 5 and CAU_TU_CHOI_MAC_DINH not in ai_response:
-                rows_to_append.append([mssv, thoi_gian_vn, current_question])
-            
-            current_question = ""
+    # Loại bỏ hoàn toàn xuống dòng, biến code dài thành 1 dòng duy nhất
+    clean_question = cau_hoi.strip().replace("\n", " ➔ ")
 
-    # Nếu không có dữ liệu để ghi, coi như hoàn thành âm thầm
-    if not rows_to_append:
-        return True  
-
-    # Tiến hành ghi dữ liệu ngầm lên Google Sheets
+    # Tiến hành ghi dữ liệu (Sử dụng insert_rows để chống nhảy dòng)
     try:
         sh  = get_google_sheet()
         wks = sh.worksheet(TAB_LICH_SU)
-        wks.append_rows(rows_to_append) 
-        return True
+        
+        # Tìm dòng trống thực tế dựa theo cột A
+        values_in_col_a = wks.col_values(1)
+        next_row = len(values_in_col_a) + 1
+        
+        # Ghi 1 dòng dữ liệu duy nhất
+        wks.insert_rows([[mssv, thoi_gian_vn, clean_question]], row=next_row) 
     except Exception as e:
-        # Lỗi in ra màn hình Terminal/Log hệ thống của Giáo viên để kiểm tra lại khi cần
-        print(f"--- [LOG HỆ THỐNG LỖI] {e} ---")
-        return f"Lỗi API: {e}" # Trả về chuỗi lỗi chi tiết phục vụ Dev Mode
+        print(f"--- [LOG LỖI GHI SHEETS] {e} ---")
 
 
 # ============================================================
-# KHỞI TẠO HỆ THỐNG RAG VÀ PHIÊN LÀM VIỆC (SESSION STATE)
+# KHỞI TẠO HỆ THỐNG RAG VÀ PHIÊN LÀM VIỆC
 # ============================================================
 if "rag_chain" not in st.session_state:
     try:
@@ -143,33 +134,23 @@ if not st.session_state.authenticated_mssv:
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
-st.sidebar.markdown(f"👤 **Sinh viên:** `{current_user}`")
+# Đưa nút Đăng xuất ra màn hình chính thay vì giấu trong Sidebar
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.markdown(f"### 🤖 Phòng học của `{current_user}`")
+with col2:
+    st.write("") # Căn chỉnh cho đẹp
+    if st.button("🚪 Đăng xuất", use_container_width=True):
+        st.session_state.authenticated_mssv = None
+        st.session_state.messages = []
+        st.rerun()
 
-# Khi người dùng nhấn nút Đăng xuất
-if st.sidebar.button("🚪 Đăng xuất"):
-    # 1. Gọi hàm xử lý lưu dữ liệu lên Excel
-    ket_qua = xu_ly_dang_xuat_va_luu_sheets(current_user, st.session_state.messages)
-    
-    # 2. CHẾ ĐỘ KIỂM TRA RIÊNG (DEV MODE): Chỉ kích hoạt nếu user là ADMIN hoặc GV_TEST
-    if current_user in ["ADMIN", "GV_TEST"]:
-        if ket_qua is True:
-            st.sidebar.success("🔑 [Dev Mode] Đã lưu ngầm vào Sheets thành công!")
-        else:
-            st.sidebar.error(f"❌ [Dev Mode] Thất bại! {ket_qua}")
-        # Giữ lại giao diện 2.5 giây để Giáo viên kịp đọc kết quả kiểm tra
-        time.sleep(2.5)
-    
-    # 3. Reset phiên làm việc để đẩy người dùng ra màn hình đăng nhập ban đầu
-    st.session_state.authenticated_mssv = None
-    st.session_state.messages = []
-    st.rerun()
-
-st.title(f"🤖 DSA Assistant (Phòng học của {current_user})")
-
+# Hiển thị lịch sử chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+# Khung nhập liệu chat
 if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cần debug vào đây..."):
     
     with st.chat_message("user"):
@@ -177,19 +158,31 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
     st.session_state.messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("assistant"):
-        with st.spinner("🤖 Đang suy nghĩ..."):
-            try:
-                res = st.session_state.rag_chain.query(prompt)
-                ans = res.get("answer", "Hệ thống không trả về câu trả lời.")
-                sources = res.get("sources", [])
-                
-                st.markdown(ans)
-                if sources:
-                    st.caption(f"📄 Tài liệu tham khảo: {', '.join(sources)}")
-                
-                st.session_state.messages.append({"role": "assistant", "content": ans})
-                
-            except Exception as e:
-                err = f"❌ Đã xảy ra lỗi hệ thống. Có thể do quá tải, thử lại sau. (Lỗi: {e})"
-                st.error(err)
-                st.session_state.messages.append({"role": "assistant", "content": err})
+        try:
+            res = st.session_state.rag_chain.query(prompt)
+            ans = res.get("answer", "Hệ thống không trả về câu trả lời.")
+            sources = res.get("sources", [])
+            
+            # CƠ CHẾ STREAM: Đổ chữ ra màn hình từ từ giống ChatGPT
+            def stream_generator():
+                for word in ans.split(" "):
+                    yield word + " "
+                    time.sleep(0.03) # Tốc độ gõ chữ
+                    
+            st.write_stream(stream_generator)
+            
+            if sources:
+                st.caption(f"📄 Tài liệu tham khảo: {', '.join(sources)}")
+            
+            st.session_state.messages.append({"role": "assistant", "content": ans})
+            
+            # GHI REAL-TIME BẰNG LUỒNG PHỤ (Không làm giật lag giao diện)
+            threading.Thread(
+                target=ghi_log_realtime, 
+                args=(current_user, prompt, ans)
+            ).start()
+            
+        except Exception as e:
+            err = f"❌ Đã xảy ra lỗi hệ thống. Có thể do quá tải, thử lại sau. (Lỗi: {e})"
+            st.error(err)
+            st.session_state.messages.append({"role": "assistant", "content": err})

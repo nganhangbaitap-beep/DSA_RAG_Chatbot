@@ -12,7 +12,6 @@ from config import (
 # Giới hạn lượt chat giữ lại trong history (1 turn = 1 cặp user/model)
 MAX_HISTORY_TURNS = 6
 
-
 class RAGChain:
     def __init__(self, vector_store):
         self.vector_store = vector_store
@@ -20,12 +19,13 @@ class RAGChain:
         # 1. Khởi tạo Client Gemini (Mô hình chính)
         if not GEMINI_API_KEY:
             raise ValueError("Thiếu GEMINI_API_KEY trong file .env!")
+            
         self.gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         self.gemini_model  = GEMINI_MODEL
 
         # 2. Khởi tạo Client Groq (Mô hình dự phòng) — import lazy tránh crash
-        self.groq_api_key = os.getenv("GROQ_API_KEY", "")
-        self.groq_model   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        self.groq_api_key = os.getenv("GROQ_API_KEY","")
+        self.groq_model   = os.getenv("GROQ_MODEL","llama-3.3-70b-versatile")
         self.groq_client  = None
 
         if self.groq_api_key:
@@ -38,23 +38,19 @@ class RAGChain:
             except Exception as e:
                 print(f"  [!] Khởi tạo Groq thất bại: {e}")
 
-        # LỚP BẢO VỆ 1: Cấu trúc lại lệnh hệ thống nghiêm ngặt, bắt buộc từ chối mọi chủ đề ngoài DSA
+        # CẬP NHẬT MỚI: Luật hệ thống linh hoạt - Hỗ trợ cả cú pháp lập trình cơ bản và chuyên sâu DSA
         self.system_instruction = (
-            "BẠN LÀ TRỢ LÝ GIẢNG DẠY CHUYÊN BIỆT CHỈ TRẢ LỜI VỀ MÔN HỌC CẤU TRÚC DỮ LIỆU VÀ GIẢI THUẬT (DSA).\n"
-            "⚠️ QUY TẮC TỐI CAO VÀ BẮT BUỘC:\n\n"
-            "1. PHẠM VI KIẾN THỨC: Bạn chỉ được phép trả lời câu hỏi liên quan trực tiếp đến môn DSA "
-            "(Ví dụ: mảng, danh sách liên kết, ngăn xếp, hàng đợi, cây nhị phân, đồ thị, thuật toán sắp xếp, "
-            "tìm kiếm, độ phức tạp thuật toán Big O, pointer, đệ quy, hoặc sửa code thuật toán DSA).\n"
-            "2. CHẶN TUYỆT ĐỐI LẠC ĐỀ: Nếu câu hỏi thuộc bất kỳ chủ đề nào khác nằm ngoài chuyên mục DSA "
-            "(Ví dụ: phần mềm Microsoft Word, Excel, kiến thức xã hội/đời sống như 'cây cao nhất thế giới', "
-            "lập trình Web, toán lý hóa, hoặc trò chuyện phiếm), bạn BẮT BUỘC PHẢI TỪ CHỐI THẲNG THẮN VÀ LỊCH SỰ, "
-            "không được sử dụng kiến thức nền của mình để trả lời hộ.\n"
-            "3. MẪU TỪ CHỐI BẮT BUỘC: Khi học sinh hỏi lạc đề, hãy đáp lại nguyên văn hoặc tương tự cấu trúc sau: "
-            "'Xin lỗi em, anh là trợ lý ảo chuyên trách môn Cấu trúc dữ liệu và Giải thuật (DSA). Anh không thể giải đáp "
-            "các thắc mắc nằm ngoài phạm vi môn học này. Em vui lòng đặt câu hỏi liên quan đến DSA nhé!'\n"
-            "4. XỬ LÝ CHÀO HỎI: Nếu người dùng chỉ chào hỏi (Ví dụ: 'hello', 'chào anh'), hãy đáp lại thân mật, ngắn gọn "
-            "và nhắc nhở các em đặt câu hỏi về chủ đề bài học DSA.\n"
-            "5. XỬ LÝ CODE DSA: Phân tích lỗi sai -> Sửa code trong khối ``` -> Giải thích lý thuyết.\n"
+            "Bạn là Trợ lý giảng dạy chuyên trách hỗ trợ sinh viên học tập môn Cấu trúc dữ liệu và Giải thuật (DSA).\n\n"
+            "⚠️ QUY TẮC PHẢN HỒI VÀ KIỂM SOÁT PHẠM VI KIẾN THỨC:\n\n"
+            "1. PHẠM VI ĐƯỢC PHÉP TRẢ LỜI:\n"
+            "   - Kiến thức chuyên sâu về DSA: Mảng, danh sách liên kết, ngăn xếp, hàng đợi, cây nhị phân, đồ thị, thuật toán sắp xếp, tìm kiếm, độ phức tạp Big O, con trỏ (pointer), đệ quy.\n"
+            "   - Kiến thức LẬP TRÌNH CƠ BẢN: Bạn ĐƯỢC PHÉP trả lời các câu hỏi về cú pháp cơ bản của các ngôn ngữ lập trình (C, C++, Java, Python, C#) như câu lệnh điều kiện (if-else, switch-case, match-case), vòng lặp (for, while), khai báo biến, hàm, function, procedure, class, OOP cơ bản... vì đây là nền tảng cốt lõi để viết code thuật toán. Hãy giải thích ngắn gọn, cho ví dụ code và nhắc nhở sinh viên áp dụng vào thực hành DSA.\n\n"
+            "2. CHẶN TUYỆT ĐỐI LẠC ĐỀ: Nếu câu hỏi thuộc các chủ đề hoàn toàn không liên quan đến học tập lập trình và máy tính "
+            "(Ví dụ: thời tiết, nấu ăn, món ăn, văn học nghị luận, ca sĩ, phim ảnh, đời tư, chính trị), bạn BẮT BUỘC PHẢI TỪ CHỐI.\n\n"
+            "3. MẪU TỪ CHỐI BẮT BUỘC: Khi học sinh hỏi lạc đề, hãy đáp lại nguyên văn cấu trúc sau:\n"
+            "   'Xin lỗi, tôi là trợ lý ảo chuyên trách môn Cấu trúc dữ liệu và Giải thuật (DSA). Tôi không thể giải đáp các thắc mắc nằm ngoài phạm vi môn học này. Bạn vui lòng đặt câu hỏi liên quan đến lập trình hoặc DSA nhé!'\n\n"
+            "4. XỬ LÝ CHÀO HỎI: Nếu người dùng chỉ chào hỏi ('hello', 'xin chào'), hãy đáp lại thân mật, ngắn gọn và hướng dẫn các em đặt câu hỏi về lập trình hoặc thuật toán.\n\n"
+            "5. XỬ LÝ CODE: Phân tích lỗi sai logic -> Sửa code đúng trong khối ``` -> Giải thích ngắn gọn.\n\n"
             "6. ĐỊNH DẠNG: Mỗi đoạn mã phải nằm trong khối ```. Trả lời hoàn toàn bằng Tiếng Việt."
         )
 
@@ -67,7 +63,6 @@ class RAGChain:
         max_items = MAX_HISTORY_TURNS * 2
         if len(self.history) > max_items:
             self.history = self.history[-max_items:]
-            # Đảm bảo không bắt đầu bằng phản hồi của trợ lý
             if self.history and self.history[0]["role"] == "assistant":
                 self.history.pop(0)
 
@@ -126,7 +121,6 @@ class RAGChain:
             max_tokens=MAX_TOKENS,
         )
 
-        # Kiểm tra choices trước khi truy cập [0] để tránh IndexError
         if not chat_completion.choices:
             raise RuntimeError("Groq trả về response trống (choices = [])")
 
@@ -137,23 +131,23 @@ class RAGChain:
         """Truy vấn RAG và sinh câu trả lời bằng cơ chế Hybrid Fallback."""
 
         # BƯỚC 1: TRUY VẤN TÀI LIỆU (RAG)
-        chunks       = self.vector_store.search(question, k=TOP_K_RESULTS)
+        chunks = self.vector_store.search(question, k=TOP_K_RESULTS)
         context_text = "\n\n".join([c.page_content for c in chunks]) if chunks else ""
 
-        # LỚP BẢO VỆ 2: Thêm chỉ thị tối cao ngay trong Prompt RAG ép AI kiểm tra nội dung
+        # CẬP NHẬT MỚI: Tinh chỉnh Prompt RAG dặn dò AI phân biệt rõ cú pháp cơ bản với lạc đề thực tế
         prompt_rag = f"""NGỮ CẢNH HỖ TRỢ TỪ GIÁO TRÌNH:
-{context_text if context_text else "Không tìm thấy tài liệu phù hợp trong DB."}
+{context_text if context_text else "Không tìm thấy tài liệu phù hợp trong cơ sở dữ liệu."}
 
 CÂU HỎI CỦA SINH VIÊN:
 {question}
 
-HƯỚNG DẪN TRẢ LỜI (BẮT BUỘC TUÂN THỦ):
-- Nếu câu hỏi KHÔNG LIÊN QUAN ĐẾN DSA (Cấu trúc dữ liệu và Giải thuật), hãy TỪ CHỐI trả lời ngay lập tức theo quy định hệ thống.
-- Nếu câu hỏi đúng chủ đề DSA, trả lời thẳng vào vấn đề.
-- TUYỆT ĐỐI KHÔNG dùng cụm từ 'Dựa trên giáo trình được cung cấp'.
+HƯỚNG DẪN XỬ LÝ (BẮT BUỘC):
+- Nếu câu hỏi nói về CÚ PHÁP LẬP TRÌNH CƠ BẢN (như if, else, vòng lặp, switch, khai báo biến...) của bất kỳ ngôn ngữ nào (C, C++, Java, Python, C#), hãy dùng kiến thức lập trình của bạn để trả lời chi tiết và cho ví dụ code. KHÔNG ĐƯỢC TỪ CHỐI.
+- Nếu câu hỏi thuộc chủ đề hoàn toàn không liên quan đến CNTT/Lập trình (thời tiết, nấu ăn, giải trí...), hãy thực hiện TỪ CHỐI theo mẫu quy định.
+- TUYỆT ĐỐI KHÔNG sử dụng cụm từ 'Dựa trên giáo trình được cung cấp'.
 - TRẢ LỜI HOÀN TOÀN BẰNG TIẾNG VIỆT."""
 
-        answer     = ""
+        answer = ""
         model_used = ""
 
         # BƯỚC 2: SINH VĂN BẢN (HYBRID FALLBACK)
@@ -176,7 +170,7 @@ HƯỚNG DẪN TRẢ LỜI (BẮT BUỘC TUÂN THỦ):
 
         # BƯỚC 3: CẬP NHẬT LỊCH SỬ
         if model_used != "Error/None":
-            self.history.append({"role": "user",      "content": question})
+            self.history.append({"role": "user", "content": question})
             self.history.append({"role": "assistant", "content": answer})
 
         self._trim_history()
