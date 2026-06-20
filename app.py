@@ -113,7 +113,7 @@ st.markdown("""
     /* Định dạng hộp thoại khung Chat khi bung lên rộng rãi, trực quan */
     div[data-testid="stPopoverWindow"] {
         width: 380px !important;
-        max-height: 520px !important;
+        max-height: 540px !important;
         background-color: #ffffff !important;
         border-radius: 20px !important;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
@@ -184,11 +184,11 @@ CHAPTER_DATA = {
 }
 
 # ============================================================
-# CẤU HÌNH TỐI ƯU BỘ NHỚ ĐỆM (CACHE RESOURCE CHỐNG SẬP PHIÊN)
+# CẤU HÌNH TỐI ƯU BỘ NHỚ ĐỆM (CACHE RESOURCE AN TOÀN)
 # ============================================================
 @st.cache_resource
 def init_rag_system():
-    """Tải và khởi tạo tài nguyên AI vào bộ nhớ đệm (Tránh nghẽn Session)"""
+    """Tải tài nguyên AI vào bộ nhớ đệm giúp tăng tốc độ phản hồi"""
     return RAGChain(VectorStore(GeminiEmbedder()))
 
 @st.cache_resource
@@ -214,18 +214,10 @@ def get_google_sheet():
 
 def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
     text_lower = cau_hoi.strip().lower()
-    
-    # 1. Bộ màng lọc chặn vĩnh viễn các câu chào hỏi từ sinh viên
     black_list = ["xin chào", "chào", "chào bạn", "hello", "hi", "alo", "test", "bot"]
-    if text_lower in black_list: 
+    if text_lower in black_list or len(text_lower) <= 5: 
         return
-        
-    # 2. Bộ lọc chặn lời chào hệ thống tự động từ AI trợ lý
     if "Tôi là trợ lý học tập" in cau_tra_loi or "Tôi là trợ lý ảo chuyên trách" in cau_tra_loi:
-        return
-        
-    # 3. Chặn ghi các câu nhập thử nghiệm quá ngắn
-    if len(text_lower) <= 5: 
         return
         
     clean_question = cau_hoi.strip().replace("\n", " ➔ ")
@@ -237,25 +229,27 @@ def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
         print(f"Log lỗi Sheets: {e}")
 
 # ============================================================
-# KHỞI TẠO BỘ NHỚ BIẾN SESSION STATE AN TOÀN
+# ĐỊNH NGHĨA CALLBACKS ĐIỀU HƯỚNG (XÓA BỎ XUNG ĐỘT ST.RERUN)
 # ============================================================
+def cb_logout():
+    st.session_state.authenticated_mssv = None
+    st.session_state.messages = []
+    st.session_state.current_page = "home"
+
+def cb_set_page(page_name):
+    st.session_state.current_page = page_name
+
+# Khởi tạo các trạng thái mặc định ban đầu
 if "authenticated_mssv" not in st.session_state: st.session_state.authenticated_mssv = None
 if "messages" not in st.session_state: st.session_state.messages = []
 if "current_page" not in st.session_state: st.session_state.current_page = "home"
 
-# Liên kết tài nguyên đã tối ưu cache vào phiên làm việc
-if "rag_chain" not in st.session_state:
-    try:
-        st.session_state.rag_chain = init_rag_system()
-    except Exception as e:
-        st.error(f"Lỗi khởi tạo AI: {e}")
-
 # ============================================================
-# ĐIỀU HƯỚNG ROUTING TOÀN DIỆN (IF-ELSE THAY THẾ CHO ST.STOP)
+# ĐIỀU HƯỚNG QUẢN LÝ PHIÊN (IF-ELSE ROUTING)
 # ============================================================
 if not st.session_state.authenticated_mssv:
     # --------------------------------------------------------
-    # MÀN HÌNH XÁC THỰC TRUY CẬP (LOGIN PAGE)
+    # MÀN HÌNH ĐĂNG NHẬP (Tải tức thì, không bị chặn luồng)
     # --------------------------------------------------------
     _, login_col, _ = st.columns([1, 1.8, 1])
     with login_col:
@@ -291,11 +285,11 @@ if not st.session_state.authenticated_mssv:
                             st.error(f"❌ Lỗi kết nối hệ thống dữ liệu: {e}")
 else:
     # --------------------------------------------------------
-    # KHÔNG GIAN ỨNG DỤNG CHÍNH KHI ĐÃ ĐĂNG NHẬP THÀNH CÔNG
+    # TRANG CHỦ HỆ THỐNG KHI ĐÃ ĐĂNG NHẬP THÀNH CÔNG
     # --------------------------------------------------------
     current_user = st.session_state.authenticated_mssv
 
-    # --- CẤU HÌNH SIDEBAR MENU BÊN TRÁI ĐÚNG THEO SƠ ĐỒ MỚI ---
+    # --- THANH ĐIỀU HƯỚNG SIDEBAR TRÁI ---
     with st.sidebar:
         st.markdown("""
         <div style='text-align: center; padding: 15px 0 10px 0;'>
@@ -305,39 +299,26 @@ else:
         </div>
         """, unsafe_allow_html=True)
         
-        # Khung hiển thị thông tin sinh viên đăng nhập dạng thẻ (Card)
         st.markdown(f"""
         <div style='background-color: #ffffff; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px;'>
             <span style='color:#64748b; font-size:0.75rem; display:block; font-weight:500;'>TÀI KHOẢN SINH VIÊN</span>
             <strong style='color:#10a37f; font-size:0.95rem;'>👤 {current_user}</strong>
-            <span style='background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-top: 5px;'>Chính thức</span>
+            <span style='background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 0.7 Gram; font-weight: 600; display: inline-block; margin-top: 5px;'>Chính thức</span>
         </div>
         """, unsafe_allow_html=True)
         
-        # Nút đăng xuất chuyển lên đầu thanh sidebar
-        if st.button("🚪 Đăng Xuất", use_container_width=True, type="secondary"):
-            st.session_state.authenticated_mssv = None
-            st.session_state.messages = []
-            st.session_state.current_page = "home"
-            st.rerun()
+        # Đăng xuất an toàn bằng Callback
+        st.button("🚪 Đăng Xuất", use_container_width=True, type="secondary", on_click=cb_logout)
             
         st.markdown("<div style='margin-bottom: 30px; border-bottom: 1px solid #e2e8f0;'></div>", unsafe_allow_html=True)
         st.markdown("<p style='color: #94a3b8; font-size: 0.75rem; font-weight:700; margin-left: 5px; margin-bottom: 8px;'>DANH MỤC HỆ THỐNG</p>", unsafe_allow_html=True)
         
-        # Bộ nút bấm chuyển đổi tab chức năng
-        if st.button("🏠 Trang Chủ Hệ Thống", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
-            st.session_state.current_page = "home"
-            st.rerun()
-            
-        if st.button("📚 Học Liệu Giáo Trình", use_container_width=True, type="primary" if st.session_state.current_page == "lessons" else "secondary"):
-            st.session_state.current_page = "lessons"
-            st.rerun()
-            
-        if st.button("🔔 Nộp Bài Thực Hành", use_container_width=True, type="primary" if st.session_state.current_page == "news" else "secondary"):
-            st.session_state.current_page = "news"
-            st.rerun()
+        # Chuyển Tab mượt mà bằng Callbacks không gây trùng lặp frame mạng
+        st.button("🏠 Trang Chủ Hệ Thống", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary", on_click=cb_set_page, args=("home",))
+        st.button("📚 Học Liệu Giáo Trình", use_container_width=True, type="primary" if st.session_state.current_page == "lessons" else "secondary", on_click=cb_set_page, args=("lessons",))
+        st.button("🔔 Nộp Bài Thực Hành", use_container_width=True, type="primary" if st.session_state.current_page == "news" else "secondary", on_click=cb_set_page, args=("news",))
 
-    # --- KHÔNG GIAN HIỂN THỊ NỘI DUNG CHÍNH (MAIN CONTENT AREA) ---
+    # --- KHÔNG GIAN HIỂN THỊ NỘI DUNG CHÍNH ---
     st.markdown(f"""
     <div class='content-header'>
         <h2 style='margin:0; font-weight:700; color:#0f172a; font-size:1.4rem;'>Học Liệu Điện Tử Số Hóa Chuyên Ngành</h2>
@@ -345,7 +326,6 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    # Xử lý nội dung hiển thị theo trang hiện hành
     if st.session_state.current_page == "home":
         st.markdown(f"### Chào mừng bạn quay trở lại học tập, sinh viên {current_user} 👋")
         st.markdown("Sử dụng các tab danh mục ở **Thanh điều hướng bên trái** để mở các chương tài liệu giáo trình hoặc truy cập cổng nộp bài tập Classroom.")
@@ -407,22 +387,28 @@ else:
                 st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
 
     # ============================================================
-    # TẠO BONG BÓNG CHAT CHATBOT NỔI GÓC DƯỚI BÊN PHẢI (ST.POPOVER)
+    # 💬 BONG BÓNG CHAT NỔI (ĐÃ CHUẨN HÓA FORM - CHỐNG CRASH)
     # ============================================================
     with st.popover("💬 Trợ lý DSA"):
         st.markdown("<h4 style='margin:0; color:#10a37f; font-weight:700;'>🤖 DSA Assistant</h4>", unsafe_allow_html=True)
         st.caption("Trợ lý ảo phân tích giải thuật và sửa lỗi code chuyên trách.")
         st.markdown("---")
         
-        # Khung cửa sổ cuộn nội dung tin nhắn chat
-        chat_container = st.container(height=340)
+        # Khung hiển thị lịch sử hội thoại
+        chat_container = st.container(height=300)
         with chat_container:
             for msg in st.session_state.messages:
                 with st.chat_message(msg["role"]):
                     st.markdown(msg["content"])
                     
-        # Ô nhập liệu tin nhắn gán ở đáy khung popover nổi
-        if prompt := st.chat_input("Hỏi lý thuyết giải thuật hoặc dán code cần debug..."):
+        # Thay st.chat_input bằng st.form để bảo vệ luồng kết nối WebSocket khi đóng/mở popover
+        with st.form("popover_chat_form", clear_on_submit=True):
+            user_query = st.text_input("Tin nhắn:", placeholder="Hỏi giải thuật hoặc dán code cần debug...", label_visibility="collapsed")
+            submit_chat = st.form_submit_button("Gửi câu hỏi ➔", use_container_width=True)
+            
+        if submit_chat and user_query.strip():
+            prompt = user_query.strip()
+            
             with chat_container:
                 with st.chat_message("user"):
                     st.markdown(prompt)
@@ -431,16 +417,15 @@ else:
             with chat_container:
                 with st.chat_message("assistant"):
                     try:
-                        # Kiểm tra xem bộ sinh chuỗi RAG chain đã sẵn sàng hay chưa
-                        if "rag_chain" in st.session_state and st.session_state.rag_chain is not None:
-                            res = st.session_state.rag_chain.query(prompt)
-                            ans = res.get("answer", "Hệ thống trục trặc, không có phản hồi.")
-                            sources = res.get("sources", [])
-                        else:
-                            ans = "🤖 Mô hình AI đang khởi động ngầm trong vài giây, bạn vui lòng gõ lại câu hỏi nhé!"
-                            sources = []
+                        # 🚀 LAZY LOADING: Chỉ khởi tạo AI khi sinh viên gửi câu hỏi đầu tiên
+                        if "rag_chain" not in st.session_state:
+                            with st.spinner("🤖 Đang kết nối trí tuệ nhân tạo..."):
+                                st.session_state.rag_chain = init_rag_system()
                         
-                        # Hiệu ứng gõ chữ trực quan, sinh động
+                        res = st.session_state.rag_chain.query(prompt)
+                        ans = res.get("answer", "Hệ thống trục trặc, không có phản hồi.")
+                        sources = res.get("sources", [])
+                        
                         def stream_generator():
                             for word in ans.split(" "):
                                 yield word + " "
@@ -451,10 +436,11 @@ else:
                             st.caption(f"📄 Tài liệu tham khảo: {', '.join(sources)}")
                             
                         st.session_state.messages.append({"role": "assistant", "content": ans})
-                        
-                        # Gọi tiến trình ngầm kiểm tra điều kiện và thực hiện ghi log lên Sheets
                         threading.Thread(target=ghi_log_realtime, args=(current_user, prompt, ans)).start()
                     except Exception as e:
-                        err = f"❌ Máy chủ phản hồi chậm. Xin vui lòng thử lại! (Chi tiết lỗi: {e})"
+                        err = f"❌ Máy chủ phản hồi chậm. Vui lòng thử lại! (Lỗi: {e})"
                         st.error(err)
                         st.session_state.messages.append({"role": "assistant", "content": err})
+            
+            # Làm mới an toàn khung chat sau khi nhận câu trả lời
+            st.rerun()
