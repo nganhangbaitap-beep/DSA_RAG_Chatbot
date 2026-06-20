@@ -16,7 +16,7 @@ from core import VectorStore, GeminiEmbedder, RAGChain
 st.set_page_config(page_title="DSA Learning System", page_icon="📚", layout="wide")
 
 # ============================================================
-# TÁI THIẾT KẾ TOÀN DIỆN GIAO DIỆN (SIDEBAR NAVIGATION STYLE)
+# TÁI THIẾT KẾ TOÀN DIỆN GIAO DIỆN (SIDEBAR STYLE & HIDE RUNNING)
 # ============================================================
 st.markdown("""
 <style>
@@ -25,6 +25,12 @@ st.markdown("""
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Inter', sans-serif;
         background-color: #f8fafc !important;
+    }
+    
+    /* 1. ẨN BIỂU TƯỢNG CHẠY RUNNING/LOADING TRÊN THANH TASK TOP-RIGHT */
+    div[data-testid="stStatusWidget"] {
+        display: none !important;
+        visibility: hidden !important;
     }
     
     /* Làm gọn không gian hiển thị nội dung chính */
@@ -74,8 +80,8 @@ st.markdown("""
         margin-bottom: 8px !important;
     }
     
-    /* Custom giao diện nút bấm trong Sidebar để trông giống Menu Tab */
-    div[data-testid="stSidebarNav"] {display: none;} /* Ẩn menu mặc định */
+    /* Ẩn menu mặc định của Streamlit */
+    div[data-testid="stSidebarNav"] {display: none;} 
     
     /* ========================================================
        CẤU HÌNH BIỂU TƯỢNG BONG BÓNG CHAT NỔI (FLOATING CHATBOT)
@@ -269,7 +275,7 @@ if not st.session_state.authenticated_mssv:
     st.stop()
 
 # ============================================================
-# THIẾT KẾ SIDEBAR MENU BÊN TRÁI ĐÚNG THEO YÊU CẦU 
+# CẤU HÌNH SIDEBAR MENU BÊN TRÁI ĐÚNG THEO SƠ ĐỒ MỚI
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
@@ -284,16 +290,24 @@ with st.sidebar:
     
     # Khung hiển thị thông tin sinh viên đăng nhập dạng thẻ (Card)
     st.markdown(f"""
-    <div style='background-color: #ffffff; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 25px;'>
+    <div style='background-color: #ffffff; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px;'>
         <span style='color:#64748b; font-size:0.75rem; display:block; font-weight:500;'>TÀI KHOẢN SINH VIÊN</span>
         <strong style='color:#10a37f; font-size:0.95rem;'>👤 {current_user}</strong>
         <span style='background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-top: 5px;'>Chính thức</span>
     </div>
     """, unsafe_allow_html=True)
     
+    # NÚT ĐĂNG XUẤT ĐÃ ĐƯỢC CHUYỂN LÊN ĐÂY (NGAY DƯỚI TÀI KHOẢN SINH VIÊN)
+    if st.button("🚪 Đăng Xuất", use_container_width=True, type="secondary"):
+        st.session_state.authenticated_mssv = None
+        st.session_state.messages = []
+        st.session_state.current_page = "home"
+        st.rerun()
+        
+    st.markdown("<div style='margin-bottom: 30px; border-bottom: 1px solid #e2e8f0;'></div>", unsafe_allow_html=True)
     st.markdown("<p style='color: #94a3b8; font-size: 0.75rem; font-weight:700; margin-left: 5px; margin-bottom: 8px;'>DANH MỤC HỆ THỐNG</p>", unsafe_allow_html=True)
     
-    # Bộ nút bấm đóng vai trò các Tab chuyển đổi trang dọc bên trái
+    # Bộ nút bấm chuyển đổi giữa các Tab chức năng nội dung
     if st.button("🏠 Trang Chủ Hệ Thống", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
         st.session_state.current_page = "home"
         st.rerun()
@@ -304,14 +318,6 @@ with st.sidebar:
         
     if st.button("🔔 Nộp Bài Thực Hành", use_container_width=True, type="primary" if st.session_state.current_page == "news" else "secondary"):
         st.session_state.current_page = "news"
-        st.rerun()
-        
-    # Nút đăng xuất được đẩy xuống cuối menu bên trái
-    st.markdown("<div style='height: 120px;'></div>", unsafe_allow_html=True)
-    if st.button("🚪 Đăng Xuất", use_container_width=True, type="secondary"):
-        st.session_state.authenticated_mssv = None
-        st.session_state.messages = []
-        st.session_state.current_page = "home"
         st.rerun()
 
 # ============================================================
@@ -378,13 +384,13 @@ elif st.session_state.current_page == "news":
     with class_col1:
         with st.container(border=True):
             st.markdown("<h3 style='color: #3b82f6; font-weight:600; margin-top:0;'>🟦 Khối Cao Đẳng</h3>", unsafe_allow_html=True)
-            st.write("Nộp bài tập thực hành tại Classroom của lớp")
+            st.write("Nộp bài tập thực hành tại Classroom của lớp học")
             st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
             
     with class_col2:
         with st.container(border=True):
             st.markdown("<h3 style='color: #f59e0b; font-weight:600; margin-top:0;'>🟨 Khối Trung Cấp</h3>", unsafe_allow_html=True)
-            st.write("Nộp bài tập thực hành tại Classroom của lớp")
+            st.write("Nộp bài tập thực hành tại Classroom của lớp học")
             st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
 
 # ============================================================
