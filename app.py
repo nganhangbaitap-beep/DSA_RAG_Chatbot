@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from config import GOOGLE_SHEET_NAME, TAB_DANH_SACH, TAB_LICH_SU
 from core import VectorStore, GeminiEmbedder, RAGChain 
 
-# Cấu hình hiển thị trang chính của Streamlit
+# Cấu hình hiển thị trang chính của Streamlit (Bắt buộc đặt đầu tiên)
 st.set_page_config(page_title="DSA Learning System", page_icon="📚", layout="wide")
 
 # ============================================================
@@ -184,9 +184,16 @@ CHAPTER_DATA = {
 }
 
 # ============================================================
-# HÀM KẾT NỐI SHEETS VÀ LƯU LOG TRỰC TUYẾN (BỘ LỌC CHẶN CÂU CHÀO)
+# CẤU HÌNH TỐI ƯU BỘ NHỚ ĐỆM (CACHE RESOURCE CHỐNG SẬP PHIÊN)
 # ============================================================
-def get_google_sheet():
+@st.cache_resource
+def init_rag_system():
+    """Tải và khởi tạo tài nguyên AI vào bộ nhớ đệm (Tránh nghẽn Session)"""
+    return RAGChain(VectorStore(GeminiEmbedder()))
+
+@st.cache_resource
+def get_google_sheet_client():
+    """Tạo kết nối xác thực Google Client duy nhất một lần"""
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     if "GOOGLE_CREDS_JSON" in os.environ:
         import json
@@ -194,10 +201,16 @@ def get_google_sheet():
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else:
         if not os.path.exists("google_creds.json"):
-            st.error("❌ Thiếu file google_creds.json để kết nối dữ liệu!")
-            st.stop()
+            return None
         creds = Credentials.from_service_account_file("google_creds.json", scopes=scopes)
-    return gspread.authorize(creds).open(GOOGLE_SHEET_NAME)
+    return gspread.authorize(creds)
+
+def get_google_sheet():
+    client = get_google_sheet_client()
+    if client is None:
+        st.error("❌ Thiếu file dữ liệu xác thực kết nối Google Sheets!")
+        st.stop()
+    return client.open(GOOGLE_SHEET_NAME)
 
 def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
     text_lower = cau_hoi.strip().lower()
@@ -224,22 +237,26 @@ def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
         print(f"Log lỗi Sheets: {e}")
 
 # ============================================================
-# KHỞI TẠO BỘ NHỚ BIẾN SESSION STATE VÀ KHUNG AI RAG CHATBOT
+# KHỞI TẠO BỘ NHỚ BIẾN SESSION STATE AN TOÀN
 # ============================================================
-if "rag_chain" not in st.session_state:
-    try:
-        st.session_state.rag_chain = RAGChain(VectorStore(GeminiEmbedder()))
-    except Exception as e:
-        st.error(f"Lỗi khởi tạo AI: {e}"); st.stop()
-
 if "authenticated_mssv" not in st.session_state: st.session_state.authenticated_mssv = None
 if "messages" not in st.session_state: st.session_state.messages = []
 if "current_page" not in st.session_state: st.session_state.current_page = "home"
 
+# Liên kết tài nguyên đã tối ưu cache vào phiên làm việc
+if "rag_chain" not in st.session_state:
+    try:
+        st.session_state.rag_chain = init_rag_system()
+    except Exception as e:
+        st.error(f"Lỗi khởi tạo AI: {e}")
+
 # ============================================================
-# MÀN HÌNH XÁC THỰC TRUY CẬP (LOGIN)
+# ĐIỀU HƯỚNG ROUTING TOÀN DIỆN (IF-ELSE THAY THẾ CHO ST.STOP)
 # ============================================================
 if not st.session_state.authenticated_mssv:
+    # --------------------------------------------------------
+    # MÀN HÌNH XÁC THỰC TRUY CẬP (LOGIN PAGE)
+    # --------------------------------------------------------
     _, login_col, _ = st.columns([1, 1.8, 1])
     with login_col:
         st.markdown("<div style='height:40px;'></div>", unsafe_allow_html=True)
@@ -272,171 +289,172 @@ if not st.session_state.authenticated_mssv:
                                 st.error(f"❌ Mã sinh viên '{input_mssv}' không thuộc danh sách lớp!")
                         except Exception as e:
                             st.error(f"❌ Lỗi kết nối hệ thống dữ liệu: {e}")
-    st.stop()
+else:
+    # --------------------------------------------------------
+    # KHÔNG GIAN ỨNG DỤNG CHÍNH KHI ĐÃ ĐĂNG NHẬP THÀNH CÔNG
+    # --------------------------------------------------------
+    current_user = st.session_state.authenticated_mssv
 
-# ============================================================
-# CẤU HÌNH SIDEBAR MENU BÊN TRÁI ĐÚNG THEO SƠ ĐỒ MỚI
-# ============================================================
-current_user = st.session_state.authenticated_mssv
-
-with st.sidebar:
-    st.markdown("""
-    <div style='text-align: center; padding: 15px 0 10px 0;'>
-        <h1 style='font-size: 2.8rem; margin:0;'>📚</h1>
-        <h3 style='color: #0f172a; margin-top:8px; font-weight:700; font-size:1.25rem;'>DSA Learning</h3>
-        <p style='color: #64748b; font-size:0.85rem; margin-bottom:20px;'>Khoa Công nghệ thông tin</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Khung hiển thị thông tin sinh viên đăng nhập dạng thẻ (Card)
-    st.markdown(f"""
-    <div style='background-color: #ffffff; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px;'>
-        <span style='color:#64748b; font-size:0.75rem; display:block; font-weight:500;'>TÀI KHOẢN SINH VIÊN</span>
-        <strong style='color:#10a37f; font-size:0.95rem;'>👤 {current_user}</strong>
-        <span style='background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-top: 5px;'>Chính thức</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # NÚT ĐĂNG XUẤT ĐÃ ĐƯỢC CHUYỂN LÊN ĐÂY (NGAY DƯỚI TÀI KHOẢN SINH VIÊN)
-    if st.button("🚪 Đăng Xuất", use_container_width=True, type="secondary"):
-        st.session_state.authenticated_mssv = None
-        st.session_state.messages = []
-        st.session_state.current_page = "home"
-        st.rerun()
-        
-    st.markdown("<div style='margin-bottom: 30px; border-bottom: 1px solid #e2e8f0;'></div>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #94a3b8; font-size: 0.75rem; font-weight:700; margin-left: 5px; margin-bottom: 8px;'>DANH MỤC HỆ THỐNG</p>", unsafe_allow_html=True)
-    
-    # Bộ nút bấm chuyển đổi giữa các Tab chức năng nội dung
-    if st.button("🏠 Trang Chủ Hệ Thống", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
-        st.session_state.current_page = "home"
-        st.rerun()
-        
-    if st.button("📚 Học Liệu Giáo Trình", use_container_width=True, type="primary" if st.session_state.current_page == "lessons" else "secondary"):
-        st.session_state.current_page = "lessons"
-        st.rerun()
-        
-    if st.button("🔔 Nộp Bài Thực Hành", use_container_width=True, type="primary" if st.session_state.current_page == "news" else "secondary"):
-        st.session_state.current_page = "news"
-        st.rerun()
-
-# ============================================================
-# KHÔNG GIAN HIỂN THỊ NỘI DUNG CHÍNH (MAIN CONTENT AREA)
-# ============================================================
-
-# Khung tiêu đề tĩnh cho vùng nội dung chính
-st.markdown(f"""
-<div class='content-header'>
-    <h2 style='margin:0; font-weight:700; color:#0f172a; font-size:1.4rem;'>Học Liệu Điện Tử Số Hóa Chuyên Ngành</h2>
-    <p style='margin:4px 0 0 0; color:#64748b; font-size:0.85rem;'>Môn học: Cấu trúc dữ liệu và Giải thuật (DSA)</p>
-</div>
-""", unsafe_allow_html=True)
-
-# --- XỬ LÝ ĐỔI NỘI DUNG THEO TAB ĐANG CHỌN Ở SIDEBAR ---
-if st.session_state.current_page == "home":
-    st.markdown(f"### Chào mừng bạn quay trở lại học tập, sinh viên {current_user} 👋")
-    st.markdown("Sử dụng các tab danh mục ở **Thanh điều hướng bên trái** để mở các chương tài liệu giáo trình hoặc truy cập cổng nộp bài tập Classroom.")
-    
-    grid_col1, grid_col2 = st.columns(2, gap="medium")
-    with grid_col1:
+    # --- CẤU HÌNH SIDEBAR MENU BÊN TRÁI ĐÚNG THEO SƠ ĐỒ MỚI ---
+    with st.sidebar:
         st.markdown("""
-        <div class='lesson-card'>
-            <span class='lesson-badge'>KHO TÀI LIỆU SỐ</span>
-            <h4 class='topic-title'>📖 Giáo trình 6 chương cốt lõi</h4>
-            <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Học phần trực quan hóa cấu trúc dữ liệu được liên kết đồng bộ trực tiếp với Google Docs trực tuyến giúp bạn đọc nhanh, tra cứu thuật toán mượt mà.</p>
+        <div style='text-align: center; padding: 15px 0 10px 0;'>
+            <h1 style='font-size: 2.8rem; margin:0;'>📚</h1>
+            <h3 style='color: #0f172a; margin-top:8px; font-weight:700; font-size:1.25rem;'>DSA Learning</h3>
+            <p style='color: #64748b; font-size:0.85rem; margin-bottom:20px;'>Khoa Công nghệ thông tin</p>
         </div>
         """, unsafe_allow_html=True)
-    with grid_col2:
-        st.markdown("""
-        <div class='lesson-card'>
-            <span class='lesson-badge'>TRỢ LÝ THUẬT TOÁN</span>
-            <h4 class='topic-title'>🤖 Trợ lý ảo DSA thông minh</h4>
-            <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Nhấp vào biểu tượng bong bóng chat luôn cố định ở <b>góc dưới bên phải màn hình</b> để hỏi lý thuyết giải thuật hoặc paste mã nguồn nhờ AI sửa lỗi logic 24/7.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-elif st.session_state.current_page == "lessons":
-    st.markdown("### 📚 Danh mục các chương giáo trình đào tạo")
-    list_chapters = [f"Chương {i}: {CHAPTER_DATA[i]['title'].split(': ')[1]}" for i in range(1, 7)]
-    selected_option = st.selectbox("Lựa chọn chương học cần nghiên cứu dữ liệu cấu trúc:", list_chapters)
-    ch_num = list_chapters.index(selected_option) + 1
-    ch_info = CHAPTER_DATA[ch_num]
-    
-    st.markdown(f"## {ch_info['title']}")
-    st.write(ch_info['desc'])
-    st.link_button("📂 Mở tệp giáo trình chi tiết (Google Docs)", ch_info['pdf'], type="primary")
-    
-    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
-    st.markdown("#### 💡 Các kiến thức cốt lõi trọng tâm cần nắm vững:")
-    for topic in ch_info['topics']:
+        
+        # Khung hiển thị thông tin sinh viên đăng nhập dạng thẻ (Card)
         st.markdown(f"""
-        <div class='lesson-card'>
-            <div class='topic-title' style='color:#10a37f !important;'>▪️ {topic['name']}</div>
-            <p style='color:#475569; font-size:0.95rem; margin:8px 0 0 0; line-height:1.5;'>{topic['detail']}</p>
+        <div style='background-color: #ffffff; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px;'>
+            <span style='color:#64748b; font-size:0.75rem; display:block; font-weight:500;'>TÀI KHOẢN SINH VIÊN</span>
+            <strong style='color:#10a37f; font-size:0.95rem;'>👤 {current_user}</strong>
+            <span style='background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-top: 5px;'>Chính thức</span>
         </div>
         """, unsafe_allow_html=True)
-
-elif st.session_state.current_page == "news":
-    st.markdown("## 🔔 Cổng nộp bài thực hành trực tuyến")
-    st.write("Sinh viên lưu ý lựa chọn chính xác khối đào tạo tương ứng để nộp bài tập về đúng phân lớp Google Classroom.")
-    
-    class_col1, class_col2 = st.columns(2, gap="medium")
-    with class_col1:
-        with st.container(border=True):
-            st.markdown("<h3 style='color: #3b82f6; font-weight:600; margin-top:0;'>🟦 Khối Cao Đẳng</h3>", unsafe_allow_html=True)
-            st.write("Nộp bài tập thực hành tại Classroom của lớp học")
-            st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
-            
-    with class_col2:
-        with st.container(border=True):
-            st.markdown("<h3 style='color: #f59e0b; font-weight:600; margin-top:0;'>🟨 Khối Trung Cấp</h3>", unsafe_allow_html=True)
-            st.write("Nộp bài tập thực hành tại Classroom của lớp học")
-            st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
-
-# ============================================================
-# TẠO BONG BÓNG CHAT CHATBOT NỔI GÓC DƯỚI BÊN PHẢI (ST.POPOVER)
-# ============================================================
-with st.popover("💬 Trợ lý DSA"):
-    st.markdown("<h4 style='margin:0; color:#10a37f; font-weight:700;'>🤖 DSA Assistant</h4>", unsafe_allow_html=True)
-    st.caption("Trợ lý ảo phân tích giải thuật và sửa lỗi code chuyên trách.")
-    st.markdown("---")
-    
-    # Khung cửa sổ cuộn nội dung tin nhắn chat
-    chat_container = st.container(height=340)
-    with chat_container:
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-                
-    # Ô nhập liệu tin nhắn gán ở đáy khung popover nổi
-    if prompt := st.chat_input("Hỏi lý thuyết giải thuật hoặc dán code cần debug..."):
-        with chat_container:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
         
+        # Nút đăng xuất chuyển lên đầu thanh sidebar
+        if st.button("🚪 Đăng Xuất", use_container_width=True, type="secondary"):
+            st.session_state.authenticated_mssv = None
+            st.session_state.messages = []
+            st.session_state.current_page = "home"
+            st.rerun()
+            
+        st.markdown("<div style='margin-bottom: 30px; border-bottom: 1px solid #e2e8f0;'></div>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #94a3b8; font-size: 0.75rem; font-weight:700; margin-left: 5px; margin-bottom: 8px;'>DANH MỤC HỆ THỐNG</p>", unsafe_allow_html=True)
+        
+        # Bộ nút bấm chuyển đổi tab chức năng
+        if st.button("🏠 Trang Chủ Hệ Thống", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
+            st.session_state.current_page = "home"
+            st.rerun()
+            
+        if st.button("📚 Học Liệu Giáo Trình", use_container_width=True, type="primary" if st.session_state.current_page == "lessons" else "secondary"):
+            st.session_state.current_page = "lessons"
+            st.rerun()
+            
+        if st.button("🔔 Nộp Bài Thực Hành", use_container_width=True, type="primary" if st.session_state.current_page == "news" else "secondary"):
+            st.session_state.current_page = "news"
+            st.rerun()
+
+    # --- KHÔNG GIAN HIỂN THỊ NỘI DUNG CHÍNH (MAIN CONTENT AREA) ---
+    st.markdown(f"""
+    <div class='content-header'>
+        <h2 style='margin:0; font-weight:700; color:#0f172a; font-size:1.4rem;'>Học Liệu Điện Tử Số Hóa Chuyên Ngành</h2>
+        <p style='margin:4px 0 0 0; color:#64748b; font-size:0.85rem;'>Môn học: Cấu trúc dữ liệu và Giải thuật (DSA)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Xử lý nội dung hiển thị theo trang hiện hành
+    if st.session_state.current_page == "home":
+        st.markdown(f"### Chào mừng bạn quay trở lại học tập, sinh viên {current_user} 👋")
+        st.markdown("Sử dụng các tab danh mục ở **Thanh điều hướng bên trái** để mở các chương tài liệu giáo trình hoặc truy cập cổng nộp bài tập Classroom.")
+        
+        grid_col1, grid_col2 = st.columns(2, gap="medium")
+        with grid_col1:
+            st.markdown("""
+            <div class='lesson-card'>
+                <span class='lesson-badge'>KHO TÀI LIỆU SỐ</span>
+                <h4 class='topic-title'>📖 Giáo trình 6 chương cốt lõi</h4>
+                <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Học phần trực quan hóa cấu trúc dữ liệu được liên kết đồng bộ trực tiếp với Google Docs trực tuyến giúp bạn đọc nhanh, tra cứu thuật toán mượt mà.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with grid_col2:
+            st.markdown("""
+            <div class='lesson-card'>
+                <span class='lesson-badge'>TRỢ LÝ THUẬT TOÁN</span>
+                <h4 class='topic-title'>🤖 Trợ lý ảo DSA thông minh</h4>
+                <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Nhấp vào biểu tượng bong bóng chat luôn cố định ở <b>góc dưới bên phải màn hình</b> để hỏi lý thuyết giải thuật hoặc paste mã nguồn nhờ AI sửa lỗi logic 24/7.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    elif st.session_state.current_page == "lessons":
+        st.markdown("### 📚 Danh mục các chương giáo trình đào tạo")
+        list_chapters = [f"Chương {i}: {CHAPTER_DATA[i]['title'].split(': ')[1]}" for i in range(1, 7)]
+        selected_option = st.selectbox("Lựa chọn chương học cần nghiên cứu dữ liệu cấu trúc:", list_chapters)
+        ch_num = list_chapters.index(selected_option) + 1
+        ch_info = CHAPTER_DATA[ch_num]
+        
+        st.markdown(f"## {ch_info['title']}")
+        st.write(ch_info['desc'])
+        st.link_button("📂 Mở tệp giáo trình chi tiết (Google Docs)", ch_info['pdf'], type="primary")
+        
+        st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+        st.markdown("#### 💡 Các kiến thức cốt lõi trọng tâm cần nắm vững:")
+        for topic in ch_info['topics']:
+            st.markdown(f"""
+            <div class='lesson-card'>
+                <div class='topic-title' style='color:#10a37f !important;'>▪️ {topic['name']}</div>
+                <p style='color:#475569; font-size:0.95rem; margin:8px 0 0 0; line-height:1.5;'>{topic['detail']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    elif st.session_state.current_page == "news":
+        st.markdown("## 🔔 Cổng nộp bài thực hành trực tuyến")
+        st.write("Sinh viên lưu ý lựa chọn chính xác khối đào tạo tương ứng để nộp bài tập về đúng phân lớp Google Classroom.")
+        
+        class_col1, class_col2 = st.columns(2, gap="medium")
+        with class_col1:
+            with st.container(border=True):
+                st.markdown("<h3 style='color: #3b82f6; font-weight:600; margin-top:0;'>🟦 Khối Cao Đẳng</h3>", unsafe_allow_html=True)
+                st.write("Nộp bài tập thực hành tại Classroom của lớp học")
+                st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
+                
+        with class_col2:
+            with st.container(border=True):
+                st.markdown("<h3 style='color: #f59e0b; font-weight:600; margin-top:0;'>🟨 Khối Trung Cấp</h3>", unsafe_allow_html=True)
+                st.write("Nộp bài tập thực hành tại Classroom của lớp học")
+                st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
+
+    # ============================================================
+    # TẠO BONG BÓNG CHAT CHATBOT NỔI GÓC DƯỚI BÊN PHẢI (ST.POPOVER)
+    # ============================================================
+    with st.popover("💬 Trợ lý DSA"):
+        st.markdown("<h4 style='margin:0; color:#10a37f; font-weight:700;'>🤖 DSA Assistant</h4>", unsafe_allow_html=True)
+        st.caption("Trợ lý ảo phân tích giải thuật và sửa lỗi code chuyên trách.")
+        st.markdown("---")
+        
+        # Khung cửa sổ cuộn nội dung tin nhắn chat
+        chat_container = st.container(height=340)
         with chat_container:
-            with st.chat_message("assistant"):
-                try:
-                    res = st.session_state.rag_chain.query(prompt)
-                    ans = res.get("answer", "Hệ thống trục trặc, không có phản hồi.")
-                    sources = res.get("sources", [])
+            for msg in st.session_state.messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
                     
-                    # Hiệu ứng gõ chữ trực quan, sinh động
-                    def stream_generator():
-                        for word in ans.split(" "):
-                            yield word + " "
-                            time.sleep(0.015)
-                    st.write_stream(stream_generator)
-                    
-                    if sources:
-                        st.caption(f"📄 Tài liệu tham khảo: {', '.join(sources)}")
+        # Ô nhập liệu tin nhắn gán ở đáy khung popover nổi
+        if prompt := st.chat_input("Hỏi lý thuyết giải thuật hoặc dán code cần debug..."):
+            with chat_container:
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            
+            with chat_container:
+                with st.chat_message("assistant"):
+                    try:
+                        # Kiểm tra xem bộ sinh chuỗi RAG chain đã sẵn sàng hay chưa
+                        if "rag_chain" in st.session_state and st.session_state.rag_chain is not None:
+                            res = st.session_state.rag_chain.query(prompt)
+                            ans = res.get("answer", "Hệ thống trục trặc, không có phản hồi.")
+                            sources = res.get("sources", [])
+                        else:
+                            ans = "🤖 Mô hình AI đang khởi động ngầm trong vài giây, bạn vui lòng gõ lại câu hỏi nhé!"
+                            sources = []
                         
-                    st.session_state.messages.append({"role": "assistant", "content": ans})
-                    
-                    # Gọi tiến trình ngầm kiểm tra điều kiện và thực hiện ghi log lên Sheets
-                    threading.Thread(target=ghi_log_realtime, args=(current_user, prompt, ans)).start()
-                except Exception as e:
-                    err = f"❌ Máy chủ phản hồi chậm. Xin vui lòng thử lại! (Chi tiết lỗi: {e})"
-                    st.error(err)
-                    st.session_state.messages.append({"role": "assistant", "content": err})
+                        # Hiệu ứng gõ chữ trực quan, sinh động
+                        def stream_generator():
+                            for word in ans.split(" "):
+                                yield word + " "
+                                time.sleep(0.015)
+                        st.write_stream(stream_generator)
+                        
+                        if sources:
+                            st.caption(f"📄 Tài liệu tham khảo: {', '.join(sources)}")
+                            
+                        st.session_state.messages.append({"role": "assistant", "content": ans})
+                        
+                        # Gọi tiến trình ngầm kiểm tra điều kiện và thực hiện ghi log lên Sheets
+                        threading.Thread(target=ghi_log_realtime, args=(current_user, prompt, ans)).start()
+                    except Exception as e:
+                        err = f"❌ Máy chủ phản hồi chậm. Xin vui lòng thử lại! (Chi tiết lỗi: {e})"
+                        st.error(err)
+                        st.session_state.messages.append({"role": "assistant", "content": err})
