@@ -124,61 +124,61 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# CƠ SỞ DỮ LIỆU ĐỒNG BỘ NỘI DUNG 6 CHƯƠNG GIÁO TRÌNH
+# CƠ SỞ DỮ LIỆU ĐỒNG BỘ NỘI DUNG 6 CHƯƠNG GIÁO TRÌNH (TINH GỌN)
 # ============================================================
 CHAPTER_DATA = {
     1: {
-        "title": "Chương 1: Thiết kế và phân tích giải thuật",
-        "desc": "Phương pháp đánh giá hiệu suất, thời gian chạy và tối ưu cấu trúc thuật toán tổng quát.",
+        "title": "Chương 1: Thiết kế & phân tích giải thuật",
+        "desc": "Đánh giá hiệu suất thuật toán qua thời gian chạy, không gian bộ nhớ và các chiến lược thiết kế tổng quát.",
         "pdf": "https://docs.google.com/document/d/1WC2VmOU_jhVfGzH_mPsQhozCDDXSFCbfpHYIBfULr2o/edit",
         "topics": [
-            {"name": "Độ phức tạp thuật toán", "detail": "Phân tích cú pháp tính toán thời gian, không gian và ý nghĩa thực tế ký pháp Big O."},
-            {"name": "Chiến lược thiết kế giải thuật", "detail": "Tìm hiểu các mô hình kinh điển: Chia để trị, Tham lam, Quy hoạch động."}
+            {"name": "Độ phức tạp thuật toán", "detail": "Big O, cách xác định và so sánh. Phân tích time/space"},
+            {"name": "Chiến lược thiết kế", "detail": "Nguyên lý giải quyết bài toán bằng phương pháp Chia để trị, Tham lam, Quy hoạch động."}
         ]
     },
     2: {
         "title": "Chương 2: Các kiểu dữ liệu cơ sở",
-        "desc": "Hệ thống hóa các kiểu dữ liệu nền tảng cấu thành cấu trúc kiến trúc lớn.",
+        "desc": "Tìm hiểu kiểu dữ liệu trừu tượng, cơ chế biến con trỏ và quản lý bộ nhớ trong lập trình.",
         "pdf": "https://docs.google.com/document/d/1eky8_mvFQfTl8kvt3pg9fDeR5Hhq1jsEz5RQrWVt7-M/edit",
         "topics": [
-            {"name": "Kiểu dữ liệu trừu tượng", "detail": "Định nghĩa tổng quan và tầm quan trọng của mô hình ADT trong cấu trúc dữ liệu."},
-            {"name": "Con trỏ & Quản lý bộ nhớ", "detail": "Cơ chế hoạt động của biến con trỏ, tham chiếu và cấp phát động vùng nhớ."}
+            {"name": "Kiểu dữ liệu trừu tượng", "detail": "Khái niệm và cách định nghĩa mô hình dữ liệu trừu tượng (ADT)."},
+            {"name": "Con trỏ và bộ nhớ", "detail": "Cơ chế hoạt động của con trỏ và kỹ thuật quản lý, cấp phát bộ nhớ động."}
         ]
     },
     3: {
-        "title": "Chương 3: Mảng, danh sách",
-        "desc": "Tổ chức và quản lý cấu trúc các kiến trúc dữ liệu dạng tuyến tính tuần tự.",
+        "title": "Chương 3: Mảng và danh sách",
+        "desc": "Tổ chức, quản lý và thao tác dữ liệu trên các cấu trúc tuyến tính (tuần tự).",
         "pdf": "https://docs.google.com/document/d/1W845YWZlPpKLogb_ECmsXSQoMqcrpfh4IhuZ-Xv7tZA/edit",
         "topics": [
-            {"name": "Cấu trúc Danh sách liên kết", "detail": "So sánh Mảng tĩnh với cấu trúc Danh sách liên kết đơn, danh sách liên kết đôi."},
-            {"name": "Ngăn xếp & Hàng đợi", "detail": "Nguyên lý hoạt động và ứng dụng thực tế cấu trúc LIFO (Stack) và FIFO (Queue)."}
+            {"name": "Mảng & Danh sách liên kết", "detail": "Cách tổ chức, vận hành dữ liệu trên cấu trúc mảng, danh sách liên kết."},
+            {"name": "Stack & Queue", "detail": "Nguyên lý hoạt động và ứng dụng của Ngăn xếp (LIFO) và Hàng đợi (FIFO)."}
         ]
     },
     4: {
         "title": "Chương 4: Cây (Tree)",
-        "desc": "Cấu trúc dữ liệu phân cấp dạng phi tuyến tính.",
+        "desc": "Tổ chức dữ liệu theo mô hình phân cấp phi tuyến tính.",
         "pdf": "https://docs.google.com/document/d/1j39PD2vDIkuzNDe6FK_AntIUSlUjttELZmeWXANeO1k/edit",
         "topics": [
-            {"name": "Cây nhị phân và các phép duyệt", "detail": "Các giải thuật duyệt cây phổ biến hệ thống: Tiền tự, Trung tự, Hậu tự."},
-            {"name": "Cây tìm kiếm nhị phân (BST)", "detail": "Ứng dụng cấu trúc cây nhị phân tăng tốc độ tìm kiếm và tối ưu chèn phần tử."}
+            {"name": "Cây nhị phân và duyệt cây", "detail": "Cấu trúc cây nhị phân và các giải thuật duyệt cây: Preorder, Inorder, Postorder."},
+            {"name": "Cây tìm kiếm nhị phân", "detail": "Đặc điểm đặc trưng của cấu trúc BST cùng các thao tác chèn, xóa và tra cứu."}
         ]
     },
     5: {
         "title": "Chương 5: Sắp xếp (Sorting)",
-        "desc": "Các kỹ thuật hoán đổi vị trí và chuẩn hóa sắp xếp dãy dữ liệu thô.",
+        "desc": "Các thuật toán tổ chức và sắp xếp thứ tự các phần tử trong dãy dữ liệu.",
         "pdf": "https://docs.google.com/document/d/1jDSv-XYq1l0iwsA-T-P9aFZy6nSn9zbMwjplUAewsoo/edit",
         "topics": [
-            {"name": "Các thuật toán sắp xếp đơn giản", "detail": "Phân tích mã nguồn giải thuật: Sắp xếp đổi chỗ, Sắp xếp chèn, Sắp xếp lựa chọn."},
-            {"name": "Các giải thuật nâng cao hiệu suất", "detail": "Cách thức vận hành chiến lược chia để trị nâng cao qua Quick Sort và Merge Sort."}
+            {"name": "Thuật toán cơ bản", "detail": "Nguyên lý vận hành các giải thuật sắp xếp: Bubble Sort, Insertion Sort, Selection Sort."},
+            {"name": "Thuật toán nâng cao", "detail": "Cơ chế tối ưu hóa thời gian xử lý dữ liệu quy mô lớn qua Quick Sort và Merge Sort."}
         ]
     },
     6: {
         "title": "Chương 6: Tìm kiếm (Searching)",
-        "desc": "Truy xuất thông tin tối ưu trên mảng và danh sách dữ liệu.",
+        "desc": "Các kỹ thuật tra cứu và truy xuất thông tin tối ưu trên cấu trúc dữ liệu.",
         "pdf": "https://docs.google.com/document/d/1txFeyednVsiMHqkbvG3WuHn4GejBETI_QaD24w1rxYY/edit",
         "topics": [
-            {"name": "Tìm kiếm tuyến tính", "detail": "Giải pháp tìm kiếm áp dụng cho tập danh sách thô chưa có thứ tự sắp xếp."},
-            {"name": "Tìm kiếm nhị phân", "detail": "Giải thuật tối ưu tốc độ áp dụng trên danh sách mảng dữ liệu đã được sắp xếp."}
+            {"name": "Tìm kiếm tuyến tính", "detail": "Thuật toán quét tuần tự áp dụng cho tập dữ liệu thô chưa qua sắp xếp."},
+            {"name": "Tìm kiếm nhị phân", "detail": "Kỹ thuật chia đôi phạm vi tra cứu, tối ưu tốc độ trên dãy dữ liệu đã có thứ tự."}
         ]
     }
 }
