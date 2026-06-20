@@ -16,35 +16,34 @@ from core import VectorStore, GeminiEmbedder, RAGChain
 st.set_page_config(page_title="DSA Learning System", page_icon="📚", layout="wide")
 
 # ============================================================
-# TÁI THIẾT KẾ TOÀN DIỆN GIAO DIỆN (ADVANCED CSS INJECTION)
+# TÁI THIẾT KẾ TOÀN DIỆN GIAO DIỆN (SIDEBAR NAVIGATION STYLE)
 # ============================================================
 st.markdown("""
 <style>
-    /* Cấu hình phông chữ và nền tảng giao diện sạch sẽ */
+    /* Cấu hình phông chữ nền tảng hệ thống */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Inter', sans-serif;
         background-color: #f8fafc !important;
     }
     
-    /* Ẩn bớt các khoảng trắng mặc định thừa thãi của Streamlit */
+    /* Làm gọn không gian hiển thị nội dung chính */
     .block-container {
         padding-top: 2rem !important;
         padding-bottom: 5rem !important;
-        max-width: 1200px !important;
     }
     
-    /* Thiết kế Thanh điều hướng & Header cao cấp */
-    .main-header {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        padding: 24px;
+    /* Thiết kế tiêu đề trang chính */
+    .content-header {
+        background-color: #ffffff;
+        padding: 20px 25px;
         border-radius: 16px;
-        color: white;
+        border: 1px solid #e2e8f0;
         margin-bottom: 25px;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     
-    /* Thẻ hiển thị nội dung bài học (Topic Cards) */
+    /* Thẻ hiển thị nội dung bài học (Lesson Cards) */
     .lesson-card {
         background-color: #ffffff;
         padding: 24px;
@@ -69,6 +68,14 @@ st.markdown("""
         display: inline-block;
         margin-bottom: 12px;
     }
+    .topic-title {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+        margin-bottom: 8px !important;
+    }
+    
+    /* Custom giao diện nút bấm trong Sidebar để trông giống Menu Tab */
+    div[data-testid="stSidebarNav"] {display: none;} /* Ẩn menu mặc định */
     
     /* ========================================================
        CẤU HÌNH BIỂU TƯỢNG BONG BÓNG CHAT NỔI (FLOATING CHATBOT)
@@ -262,60 +269,83 @@ if not st.session_state.authenticated_mssv:
     st.stop()
 
 # ============================================================
-# KHÔNG GIAN LÀM VIỆC CHÍNH (FULL-WIDTH DASHBOARD WORKSPACE)
+# THIẾT KẾ SIDEBAR MENU BÊN TRÁI ĐÚNG THEO YÊU CẦU 
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
-# Thanh Tiêu Đề Dashboard Hiện Đại
-st.markdown(f"""
-<div class='main-header'>
-    <div style='display: flex; justify-content: space-between; align-items: center;'>
-        <div>
-            <h2 style='margin:0; font-weight:700; color:white; font-size:1.6rem;'>Hệ Thống Học Liệu Điện Tử Số Hóa</h2>
-            <p style='margin:5px 0 0 0; color:#94a3b8; font-size:0.9rem;'>Học phần: Cấu trúc dữ liệu & Giải thuật | Khoa Công nghệ thông tin</p>
-        </div>
-        <div style='text-align: right; background: rgba(255,255,255,0.07); padding: 8px 16px; border-radius: 10px;'>
-            <span style='color:#cbd5e1; font-size:0.85rem; display:block;'>Tài khoản đăng nhập</span>
-            <strong style='color:#10a37f; font-size:1rem;'>👤 {current_user}</strong>
-        </div>
+with st.sidebar:
+    st.markdown("""
+    <div style='text-align: center; padding: 15px 0 10px 0;'>
+        <h1 style='font-size: 2.8rem; margin:0;'>📚</h1>
+        <h3 style='color: #0f172a; margin-top:8px; font-weight:700; font-size:1.25rem;'>DSA Learning</h3>
+        <p style='color: #64748b; font-size:0.85rem; margin-bottom:20px;'>Khoa Công nghệ thông tin</p>
     </div>
+    """, unsafe_allow_html=True)
+    
+    # Khung hiển thị thông tin sinh viên đăng nhập dạng thẻ (Card)
+    st.markdown(f"""
+    <div style='background-color: #ffffff; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 25px;'>
+        <span style='color:#64748b; font-size:0.75rem; display:block; font-weight:500;'>TÀI KHOẢN SINH VIÊN</span>
+        <strong style='color:#10a37f; font-size:0.95rem;'>👤 {current_user}</strong>
+        <span style='background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-top: 5px;'>Chính thức</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<p style='color: #94a3b8; font-size: 0.75rem; font-weight:700; margin-left: 5px; margin-bottom: 8px;'>DANH MỤC HỆ THỐNG</p>", unsafe_allow_html=True)
+    
+    # Bộ nút bấm đóng vai trò các Tab chuyển đổi trang dọc bên trái
+    if st.button("🏠 Trang Chủ Hệ Thống", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
+        st.session_state.current_page = "home"
+        st.rerun()
+        
+    if st.button("📚 Học Liệu Giáo Trình", use_container_width=True, type="primary" if st.session_state.current_page == "lessons" else "secondary"):
+        st.session_state.current_page = "lessons"
+        st.rerun()
+        
+    if st.button("🔔 Nộp Bài Thực Hành", use_container_width=True, type="primary" if st.session_state.current_page == "news" else "secondary"):
+        st.session_state.current_page = "news"
+        st.rerun()
+        
+    # Nút đăng xuất được đẩy xuống cuối menu bên trái
+    st.markdown("<div style='height: 120px;'></div>", unsafe_allow_html=True)
+    if st.button("🚪 Đăng Xuất", use_container_width=True, type="secondary"):
+        st.session_state.authenticated_mssv = None
+        st.session_state.messages = []
+        st.session_state.current_page = "home"
+        st.rerun()
+
+# ============================================================
+# KHÔNG GIAN HIỂN THỊ NỘI DUNG CHÍNH (MAIN CONTENT AREA)
+# ============================================================
+
+# Khung tiêu đề tĩnh cho vùng nội dung chính
+st.markdown(f"""
+<div class='content-header'>
+    <h2 style='margin:0; font-weight:700; color:#0f172a; font-size:1.4rem;'>Học Liệu Điện Tử Số Hóa Chuyên Ngành</h2>
+    <p style='margin:4px 0 0 0; color:#64748b; font-size:0.85rem;'>Môn học: Cấu trúc dữ liệu và Giải thuật (DSA)</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Thanh Điều Hướng Dạng Nút Bấm Đẹp
-nav1, nav2, nav3, nav_out = st.columns([1, 1, 1, 0.8])
-if nav1.button("🏠 Trang Chủ Hệ Thống", use_container_width=True): st.session_state.current_page = "home"
-if nav2.button("📚 Học Liệu Giáo Trình", use_container_width=True): st.session_state.current_page = "lessons"
-if nav3.button("🔔 Nộp Bài Thực Hành", use_container_width=True): st.session_state.current_page = "news"
-
-if nav_out.button("🚪 Đăng Xuất", use_container_width=True, type="secondary"):
-    st.session_state.authenticated_mssv = None
-    st.session_state.messages = []
-    st.session_state.current_page = "home"
-    st.rerun()
-    
-st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
-
-# --- PHÂN PHỐI NỘI DUNG THEO TỪNG TAB TRANG CHỨC NĂNG ---
+# --- XỬ LÝ ĐỔI NỘI DUNG THEO TAB ĐANG CHỌN Ở SIDEBAR ---
 if st.session_state.current_page == "home":
-    st.markdown(f"### Chào mừng quay trở lại, sinh viên {current_user} 👋")
-    st.markdown("Lựa chọn các mục lục trên thanh điều hướng để tải tài liệu giáo trình hoặc xem thông tin nộp bài tập thực hành.")
+    st.markdown(f"### Chào mừng bạn quay trở lại học tập, sinh viên {current_user} 👋")
+    st.markdown("Sử dụng các tab danh mục ở **Thanh điều hướng bên trái** để mở các chương tài liệu giáo trình hoặc truy cập cổng nộp bài tập Classroom.")
     
     grid_col1, grid_col2 = st.columns(2, gap="medium")
     with grid_col1:
         st.markdown("""
         <div class='lesson-card'>
-            <span class='lesson-badge'>HỌC LIỆU CHÍNH THỨC</span>
-            <h4 class='topic-title' style='margin-top:0;'>📖 Giáo trình 6 chương cốt lõi</h4>
-            <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Nội dung bài học được biên soạn chi tiết, tích hợp liên kết trực tiếp tới tài liệu Google Docs trực tuyến giúp xem nhanh và thực hành code tiện lợi.</p>
+            <span class='lesson-badge'>KHO TÀI LIỆU SỐ</span>
+            <h4 class='topic-title'>📖 Giáo trình 6 chương cốt lõi</h4>
+            <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Học phần trực quan hóa cấu trúc dữ liệu được liên kết đồng bộ trực tiếp với Google Docs trực tuyến giúp bạn đọc nhanh, tra cứu thuật toán mượt mà.</p>
         </div>
         """, unsafe_allow_html=True)
     with grid_col2:
         st.markdown("""
         <div class='lesson-card'>
-            <span class='lesson-badge'>AI ASSISTANT</span>
-            <h4 class='topic-title' style='margin-top:0;'>🤖 Trợ lý ảo DSA thông minh</h4>
-            <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Sử dụng biểu tượng chat luôn hiển thị ở <b>góc dưới bên phải màn hình</b> để trò chuyện trực tiếp, phân tích cấu trúc lỗi logic hoặc sửa lỗi mã nguồn lập trình 24/7.</p>
+            <span class='lesson-badge'>TRỢ LÝ THUẬT TOÁN</span>
+            <h4 class='topic-title'>🤖 Trợ lý ảo DSA thông minh</h4>
+            <p style='color:#475569; font-size:0.9rem; line-height:1.5;'>Nhấp vào biểu tượng bong bóng chat luôn cố định ở <b>góc dưới bên phải màn hình</b> để hỏi lý thuyết giải thuật hoặc paste mã nguồn nhờ AI sửa lỗi logic 24/7.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -335,26 +365,26 @@ elif st.session_state.current_page == "lessons":
     for topic in ch_info['topics']:
         st.markdown(f"""
         <div class='lesson-card'>
-            <div class='topic-title'>▪️ {topic['name']}</div>
+            <div class='topic-title' style='color:#10a37f !important;'>▪️ {topic['name']}</div>
             <p style='color:#475569; font-size:0.95rem; margin:8px 0 0 0; line-height:1.5;'>{topic['detail']}</p>
         </div>
         """, unsafe_allow_html=True)
 
 elif st.session_state.current_page == "news":
     st.markdown("## 🔔 Cổng nộp bài thực hành trực tuyến")
-    st.write("Vui lòng lựa chọn chính xác hệ đào tạo tương ứng để nộp bài tập về đúng phân lớp Google Classroom.")
+    st.write("Sinh viên lưu ý lựa chọn chính xác khối đào tạo tương ứng để nộp bài tập về đúng phân lớp Google Classroom.")
     
     class_col1, class_col2 = st.columns(2, gap="medium")
     with class_col1:
         with st.container(border=True):
             st.markdown("<h3 style='color: #3b82f6; font-weight:600; margin-top:0;'>🟦 Khối Cao Đẳng</h3>", unsafe_allow_html=True)
-            st.write("Yêu cầu hoàn thiện tệp tài liệu báo cáo phân tích thuật toán (.docx) kèm các file mã nguồn chương trình mở rộng (.cpp).")
+            st.write("Nộp bài tập thực hành tại Classroom của lớp")
             st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
             
     with class_col2:
         with st.container(border=True):
             st.markdown("<h3 style='color: #f59e0b; font-weight:600; margin-top:0;'>🟨 Khối Trung Cấp</h3>", unsafe_allow_html=True)
-            st.write("Yêu cầu hoàn thành bài thi trắc nghiệm đánh giá lý thuyết giải thuật định kỳ và tải lên hình ảnh kết quả xác thực lớp học.")
+            st.write("Nộp bài tập thực hành tại Classroom của lớp")
             st.link_button("VÀO LỚP GOOGLE CLASSROOM", "https://classroom.google.com/c/ODQ3NzA2MTY2Mjc2?cjc=wnxa7x6m", use_container_width=True)
 
 # ============================================================
