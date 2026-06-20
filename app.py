@@ -14,8 +14,43 @@ from config import GOOGLE_SHEET_NAME, TAB_DANH_SACH, TAB_LICH_SU
 # Nạp các module xử lý AI từ thư mục core
 from core import VectorStore, GeminiEmbedder, RAGChain 
 
-# Cấu hình giao diện trang Streamlit (Xóa bỏ toàn bộ phần CSS Hack cũ để giao diện tự động co giãn chuẩn)
+# Cấu hình giao diện trang Streamlit
 st.set_page_config(page_title="DSA Assistant", page_icon="🤖", layout="centered")
+
+
+# ============================================================
+# HÀM KIỂM TRA SỨC KHỎE API (RÚT GỌN CHỈ HIỂN THỊ MÀU 🟢/🔴)
+# ============================================================
+def kiem_tra_trang_thai_api():
+    status = {"gemini": "🔴", "groq": "🔴"}
+    
+    # 1. Kiểm tra Gemini (Ưu tiên hàng đầu)
+    try:
+        import google.generativeai as genai
+        test_model = genai.GenerativeModel('gemini-1.5-flash')
+        response = test_model.generate_content("ping", generation_config={"max_output_tokens": 1})
+        if response.text:
+            status["gemini"] = "🟢"
+    except Exception:
+        status["gemini"] = "🔴"
+
+    # 2. Kiểm tra Groq (Dự phòng)
+    try:
+        from groq import Groq
+        groq_key = os.environ.get("GROQ_API_KEY", "")
+        if groq_key:
+            client = Groq(api_key=groq_key)
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1
+            )
+            if completion.choices[0].message.content:
+                status["groq"] = "🟢"
+    except Exception:
+        status["groq"] = "🔴"
+        
+    return status
 
 
 # ============================================================
@@ -42,12 +77,18 @@ def get_google_sheet():
 
 
 # ============================================================
-# HÀM GHI LOG REAL-TIME (CHẠY NGẦM BẰNG THREADING)
+# HÀM GHI LOG REAL-TIME (ĐÃ SỬA LỖI CHẶN GHI LỜI CHÀO BAN ĐẦU)
 # ============================================================
 def ghi_log_realtime(mssv, cau_hoi, cau_tra_loi):
+    # CHẶN LƯU CÁC LỜI CHÀO MẶC ĐỊNH CỦA HỆ THỐNG
+    if "Chào bạn" in cau_hoi and "Tôi là trợ lý học tập môn DSA" in cau_hoi:
+        return
+    
+    # Bộ lọc dựa vào phản hồi từ chối ngoài phạm vi môn học của AI
     if "Xin lỗi, tôi là trợ lý ảo chuyên trách" in cau_tra_loi:
         return 
         
+    # Chặn các câu chat quá ngắn hoặc rác (< 5 ký tự)
     if len(cau_hoi.strip()) <= 5:
         return
 
@@ -109,6 +150,7 @@ if not st.session_state.authenticated_mssv:
                         
                         if input_mssv in danh_sach_mssv_hop_le:
                             st.session_state.authenticated_mssv = input_mssv
+                            # Lời chào ban đầu được cấu hình rõ ràng
                             st.session_state.messages = [{"role": "assistant", "content": f"Chào bạn **{input_mssv}**! Tôi là trợ lý học tập môn DSA. Hôm nay bạn cần hỗ trợ gì về cấu trúc dữ liệu, giải thuật hoặc sửa code?"}]
                             st.success("✅ Xác thực thành công!")
                             st.rerun()
@@ -124,13 +166,20 @@ if not st.session_state.authenticated_mssv:
 # ============================================================
 current_user = st.session_state.authenticated_mssv
 
-# --- 🛠️ ĐƯA THÔNG TIN & NÚT ĐĂNG XUẤT VÀO THANH BÊN (SIDEBAR) 🛠️ ---
+# --- THANH BÊN (SIDEBAR) ĐÃ ĐƯỢC TINH CHỈNH ĐÈN STATUS SIÊU GỌN ---
 with st.sidebar:
     st.markdown(f"### 👤 Tài khoản: **{current_user}**")
     st.caption("Trợ lý học tập chuyên trách môn DSA")
     st.markdown("---")
     
-    # Nút Đăng xuất dạng Primary (Màu đỏ sẫm mặc định của Streamlit) chiếm trọn chiều rộng thanh bên
+    st.markdown("⚙️ **Trạng thái kết nối:**")
+    # Gọi hàm kiểm tra trạng thái nhanh để lấy đèn màu
+    ai_status = kiem_tra_trang_thai_api()
+    st.write(f"🤖 Gemini 1.5: {ai_status['gemini']}")
+    st.write(f"⚡ Groq Llama: {ai_status['groq']}")
+    
+    st.markdown("---")
+    
     if st.button("🚪 Đăng xuất khỏi phòng học", use_container_width=True, type="primary"):
         st.session_state.authenticated_mssv = None
         st.session_state.messages = []
@@ -143,7 +192,6 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Khung nhập liệu câu hỏi chat - BÂY GIỜ HOÀN TOÀN KHÔNG BỊ LỖI HIỂN THỊ
 if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cần debug vào đây..."):
     
     with st.chat_message("user"):
@@ -152,9 +200,13 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
     
     with st.chat_message("assistant"):
         try:
+            # Gọi truy vấn tuần tự: Hệ thống RAG Core sẽ thử gọi Gemini trước, nếu lỗi chuyển sang Groq
             res = st.session_state.rag_chain.query(prompt)
             ans = res.get("answer", "Hệ thống không trả về câu trả lời.")
             sources = res.get("sources", [])
+            
+            # Khởi tạo khoảng nghỉ ngắn (2 giây) giúp giãn cách thời gian gửi API, giảm lỗi cạn kịch khung hình (Rate Limit 429)
+            time.sleep(2)
             
             def stream_generator():
                 for word in ans.split(" "):
@@ -168,6 +220,7 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             
             st.session_state.messages.append({"role": "assistant", "content": ans})
             
+            # Ghi log real-time không đồng bộ
             threading.Thread(
                 target=ghi_log_realtime, 
                 args=(current_user, prompt, ans)
@@ -176,6 +229,6 @@ if prompt := st.chat_input("Nhập câu hỏi lý thuyết hoặc dán code cầ
             st.rerun()
             
         except Exception as e:
-            err = f"❌ Đã xảy ra lỗi hệ thống. Có thể do quá tải, thử lại sau. (Lỗi: {e})"
+            err = f"❌ Đã xảy ra lỗi hệ thống hoặc các máy chủ API miễn phí đều đang quá tải hạn mức. Xin vui lòng thử lại sau ít phút! (Chi tiết lỗi: {e})"
             st.error(err)
             st.session_state.messages.append({"role": "assistant", "content": err})
